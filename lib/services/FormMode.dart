@@ -1,0 +1,5 @@
+
+enum BkmFormMode {
+  add,
+  edit,
+}

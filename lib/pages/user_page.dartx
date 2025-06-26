@@ -1,0 +1,49 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_application_3/models/user.dart';
+import 'package:flutter_application_3/providers/user_provider.dart';
+import 'package:provider/provider.dart';
+
+class UserListScreen extends StatelessWidget {
+  const UserListScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('User list')),
+      body: Consumer<UserProvider>(
+        builder: (context, userProvider, child) {
+          return FutureBuilder(
+            future: userProvider.fetchUsers(),
+            builder: (context, snapshot) {
+                return ListView.builder(
+                  itemCount: userProvider.users.length,
+                  itemBuilder: (context, index) {
+                    final user = userProvider.users[index];
+                    return ListTile(
+                      title: Text(user.name),
+                      subtitle: Text(user.name),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete),
+                        onPressed: () {
+                          userProvider.deleteUser(user.id);
+                        },
+                      ),
+                    );
+                  },
+                );
+             
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final newUser = User(id: 0, name: 'syarifah');
+          await Provider.of<UserProvider>(context, listen: false)
+              .addUser(newUser);
+        },
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
