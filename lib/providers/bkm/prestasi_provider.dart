@@ -401,6 +401,10 @@ class PrestasiProvider with ChangeNotifier {
     SELECT 
       d.jumlahpokok,
       d.luasareaproduktif,
+      a.fotoStart2,
+      a.jumlahhasilkerja,
+      a.fotoend2,
+      a.kelompok, 
       b.satuan,
       a.kodekegiatan,
       a.kodeorg,
@@ -422,6 +426,7 @@ class PrestasiProvider with ChangeNotifier {
     """;
 
       final result = await db.rawQuery(query);
+
       _prestasiList = result;
       notifyListeners();
       return result;

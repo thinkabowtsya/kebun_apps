@@ -301,6 +301,7 @@ class _AddDataBodyState extends State<AddDataBody> {
                     label: 'TAMBAH',
                     onPressed: () async {
                       print('kehadiran');
+                      await Navigator.of(context).pushNamed('/add-absensi');
                     },
                   ),
                   _buildPrestasiSection()

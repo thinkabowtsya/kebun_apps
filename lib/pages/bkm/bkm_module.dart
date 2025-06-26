@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_3/pages/bkm/absensi.dart';
 import 'package:flutter_application_3/pages/bkm/addData.dart';
 import 'package:flutter_application_3/pages/bkm/addKehadiran.dart';
 import 'package:flutter_application_3/pages/bkm/addPrestasi.dart';
 import 'package:flutter_application_3/pages/bkm/editPrestasi.dart';
 import 'package:flutter_application_3/pages/bkm/material.dart';
 import 'package:flutter_application_3/pages/bkm_page.dart';
+import 'package:flutter_application_3/providers/bkm/absensi_provider.dart';
 import 'package:flutter_application_3/providers/bkm/bkm_provider.dart';
 import 'package:flutter_application_3/providers/bkm/kehadiran_provider.dart';
 import 'package:flutter_application_3/providers/bkm/material_provider.dart';
@@ -22,6 +24,7 @@ class BkmModule extends StatelessWidget {
       ChangeNotifierProvider(create: (_) => PrestasiProvider()),
       ChangeNotifierProvider(create: (_) => KehadiranProvider()),
       ChangeNotifierProvider(create: (_) => MaterialProvider()),
+      ChangeNotifierProvider(create: (_) => AbsensiProvider()),
     ], child: const BkmNavigator());
   }
 }
@@ -73,6 +76,9 @@ class BkmNavigator extends StatelessWidget {
                 break;
               case '/add-material':
                 page = FormMaterialPage();
+                break;
+              case '/add-absensi':
+                page = FormAbsensiPage();
                 break;
               default:
                 page = const BukuKerjaMandorPage();

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_application_3/pages/bkm/addKehadiran.dart';
 import 'package:flutter_application_3/providers/bkm/bkm_provider.dart';
@@ -14,9 +16,6 @@ import 'package:image/image.dart' as img;
 import 'dart:io';
 
 class EditPrestasiPage extends StatelessWidget {
-  // final BkmFormMode mode;
-  // final List<Map<String, dynamic>>? dataList;
-
   EditPrestasiPage({super.key});
 
   @override
@@ -38,7 +37,6 @@ class EditPrestasiBody extends StatefulWidget {
   State<EditPrestasiBody> createState() => _EditPrestasiBodyState();
 }
 
-// class _EditPrestasiBodyState extends State<EditPrestasiBody> {
 class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
   final TextEditingController _noTransaksiController = TextEditingController();
   CameraController? _cameraController;
@@ -49,6 +47,8 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
   bool _isTakingPicture2 = false;
   Position? _currentPosition;
   bool _isTakingPicture = false;
+  String? _base64Image1;
+  String? _base64Image2;
 
   @override
   void initState() {
@@ -63,30 +63,12 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
     double? luasareaproduktifTemp = bkmProv.luasproduktifTemp;
     double? luaspokokTemp = bkmProv.luaspokokTemp;
 
-    // print('tempp data');
-
-    // print(kodeorgTemp);
-    // print(luasareaproduktifTemp);
-    // print(luaspokokTemp);
-    print('masuksss');
     kehadiranList(
         notransaksi: noTransaksi.toString(),
         kodekegiatan: kodekegiatanTemp.toString(),
         kodeorg: kodeorgTemp.toString(),
         kelompok: '',
         luasareaproduktif: luasareaproduktifTemp.toString());
-
-    // print('NoBKM dari halaman sebelumnya: ${widget.noBKM}');
-
-    // WidgetsBinding.instance.addPostFrameCallback((_) async {
-    //   await Provider.of<KehadiranProvider>(context, listen: false)
-    //       .fetchKehadiranByTransaksi(
-    //           notransaksi: noTransaksi.toString(),
-    //           kodekegiatan: kodekegiatanTemp.toString(),
-    //           kodeorg: kodeorgTemp.toString(),
-    //           kelompok: '',
-    //           luasareaproduktif: luasareaproduktifTemp.toString());
-    // });
   }
 
   Future<void> kehadiranList({
@@ -327,19 +309,6 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
       double? luasareaproduktifTemp = provider.luasproduktifTemp;
       double? luaspokokTemp = provider.luaspokokTemp;
 
-      // print('tempp data');
-
-      // print(kodeorgTemp);
-      // print(luasareaproduktifTemp);
-      // print(luaspokokTemp);
-
-      // kehadiranList(
-      //     notransaksi: noTransaksi.toString(),
-      //     kodekegiatan: kodekegiatanTemp.toString(),
-      //     kodeorg: kodeorgTemp.toString(),
-      //     kelompok: '',
-      //     luasareaproduktif: luasareaproduktifTemp.toString());
-
       return SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -361,12 +330,7 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
                     TextButton(
                       onPressed: () async {
                         print('tambah');
-                        // await Navigator.push<Map<String, dynamic>>(
-                        //   context,
-                        //   MaterialPageRoute(
-                        //     builder: (context) => TambahKehadiranPage(),
-                        //   ),
-                        // );
+
                         await Navigator.of(context).pushNamed('/add-kehadiran');
                       },
                       style: TextButton.styleFrom(
@@ -865,9 +829,139 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
     });
   }
 
+  // Widget _buildCameraPreviewWithButton(int index) {
+  //   // Jika ini foto 2 dan foto 1 belum ada
+  //   if (index == 1 && _watermarkedImage1 == null) {
+  //     return Container(
+  //       height: 200,
+  //       decoration: BoxDecoration(
+  //         border: Border.all(color: Colors.grey),
+  //         borderRadius: BorderRadius.circular(8),
+  //       ),
+  //       child: const Center(
+  //         child: Text(
+  //           'Ambil Foto 1 terlebih dahulu',
+  //           style: TextStyle(color: Colors.grey),
+  //         ),
+  //       ),
+  //     );
+  //   }
+
+  //   final File? photo = index == 0 ? _watermarkedImage1 : _watermarkedImage2;
+  //   final bool isTakingPhoto =
+  //       index == 0 ? _isTakingPicture1 : _isTakingPicture2;
+
+  //   return Container(
+  //     height: 200,
+  //     decoration: BoxDecoration(
+  //       border: Border.all(color: Colors.grey),
+  //       borderRadius: BorderRadius.circular(8),
+  //     ),
+  //     child: Stack(
+  //       alignment: Alignment.center,
+  //       children: [
+  //         // Camera Preview atau Foto yang sudah diambil
+  //         if (photo != null)
+  //           Stack(
+  //             children: [
+  //               Image.file(
+  //                 photo,
+  //                 fit: BoxFit.cover,
+  //                 width: double.infinity,
+  //                 height: double.infinity,
+  //               ),
+  //               Positioned(
+  //                 bottom: 0,
+  //                 left: 0,
+  //                 right: 0,
+  //                 child: Container(
+  //                   padding: const EdgeInsets.all(4),
+  //                   color: Colors.black.withOpacity(0.7),
+  //                   child: Text(
+  //                     _currentPosition != null
+  //                         ? 'Foto ${index + 1}: ${DateTime.now().toLocal().toString().split('.')[0]}\n'
+  //                             'Lat: ${_currentPosition!.latitude.toStringAsFixed(4)}\n'
+  //                             'Long: ${_currentPosition!.longitude.toStringAsFixed(4)}'
+  //                         : 'Foto ${index + 1}: ${DateTime.now().toLocal().toString().split('.')[0]}',
+  //                     style: const TextStyle(
+  //                       color: Colors.white,
+  //                       fontSize: 9,
+  //                     ),
+  //                     maxLines: 3,
+  //                   ),
+  //                 ),
+  //               ),
+  //             ],
+  //           )
+  //         else
+  //           (_cameraController != null &&
+  //                   _cameraController!.value.isInitialized)
+  //               ? FittedBox(
+  //                   fit: BoxFit.cover,
+  //                   child: SizedBox(
+  //                     width: 500,
+  //                     height: 600,
+  //                     child: CameraPreview(_cameraController!),
+  //                   ),
+  //                 )
+  //               : const Center(child: CircularProgressIndicator()),
+
+  //         // Tombol ambil foto di tengah (hanya muncul jika belum ada foto)
+  //         if (photo == null && (index == 0 || _watermarkedImage1 != null))
+  //           Positioned(
+  //             bottom: 10,
+  //             child: FloatingActionButton(
+  //               mini: true,
+  //               backgroundColor: const Color.fromARGB(255, 34, 85, 126),
+  //               onPressed: isTakingPhoto ? null : () => _takePicture(index),
+  //               child: isTakingPhoto
+  //                   ? const SizedBox(
+  //                       width: 20,
+  //                       height: 20,
+  //                       child: CircularProgressIndicator(
+  //                         strokeWidth: 2,
+  //                         valueColor:
+  //                             AlwaysStoppedAnimation<Color>(Colors.white),
+  //                       ),
+  //                     )
+  //                   : const Icon(Icons.camera_alt, color: Colors.white),
+  //             ),
+  //           ),
+
+  //         // Tombol clear (X) di pojok kanan atas (hanya muncul jika sudah ada foto)
+  //         if (photo != null)
+  //           Positioned(
+  //             top: 5,
+  //             right: 5,
+  //             child: GestureDetector(
+  //               onTap: () => _clearPhoto(index),
+  //               child: Container(
+  //                 padding: const EdgeInsets.all(4),
+  //                 decoration: BoxDecoration(
+  //                   color: Colors.black.withOpacity(0.5),
+  //                   shape: BoxShape.circle,
+  //                 ),
+  //                 child: const Icon(
+  //                   Icons.close,
+  //                   color: Colors.white,
+  //                   size: 20,
+  //                 ),
+  //               ),
+  //             ),
+  //           ),
+  //       ],
+  //     ),
+  //   );
+  // }
+
   Widget _buildCameraPreviewWithButton(int index) {
-    // Jika ini foto 2 dan foto 1 belum ada
-    if (index == 1 && _watermarkedImage1 == null) {
+    final File? photo = index == 0 ? _watermarkedImage1 : _watermarkedImage2;
+    final bool isTakingPhoto =
+        index == 0 ? _isTakingPicture1 : _isTakingPicture2;
+    final String? base64Photo = index == 0 ? _base64Image1 : _base64Image2;
+
+    // Jika ini foto ke-2 tapi foto ke-1 belum ada
+    if (index == 1 && _watermarkedImage1 == null && _base64Image1 == null) {
       return Container(
         height: 200,
         decoration: BoxDecoration(
@@ -883,9 +977,12 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
       );
     }
 
-    final File? photo = index == 0 ? _watermarkedImage1 : _watermarkedImage2;
-    final bool isTakingPhoto =
-        index == 0 ? _isTakingPicture1 : _isTakingPicture2;
+    ImageProvider? imageProvider;
+    if (photo != null) {
+      imageProvider = FileImage(photo);
+    } else if (base64Photo != null && base64Photo.isNotEmpty) {
+      imageProvider = MemoryImage(base64Decode(base64Photo));
+    }
 
     return Container(
       height: 200,
@@ -896,12 +993,11 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Camera Preview atau Foto yang sudah diambil
-          if (photo != null)
+          if (imageProvider != null)
             Stack(
               children: [
-                Image.file(
-                  photo,
+                Image(
+                  image: imageProvider,
                   fit: BoxFit.cover,
                   width: double.infinity,
                   height: double.infinity,
@@ -919,30 +1015,27 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
                               'Lat: ${_currentPosition!.latitude.toStringAsFixed(4)}\n'
                               'Long: ${_currentPosition!.longitude.toStringAsFixed(4)}'
                           : 'Foto ${index + 1}: ${DateTime.now().toLocal().toString().split('.')[0]}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 9),
                       maxLines: 3,
                     ),
                   ),
                 ),
               ],
             )
+          else if (_cameraController != null &&
+              _cameraController!.value.isInitialized)
+            FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: 500,
+                height: 600,
+                child: CameraPreview(_cameraController!),
+              ),
+            )
           else
-            (_cameraController != null &&
-                    _cameraController!.value.isInitialized)
-                ? FittedBox(
-                    fit: BoxFit.cover,
-                    child: SizedBox(
-                      width: 500,
-                      height: 600,
-                      child: CameraPreview(_cameraController!),
-                    ),
-                  )
-                : const Center(child: CircularProgressIndicator()),
+            const Center(child: CircularProgressIndicator()),
 
-          // Tombol ambil foto di tengah (hanya muncul jika belum ada foto)
+          // Tombol kamera hanya muncul jika belum ada foto
           if (photo == null && (index == 0 || _watermarkedImage1 != null))
             Positioned(
               bottom: 10,
@@ -964,7 +1057,7 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
               ),
             ),
 
-          // Tombol clear (X) di pojok kanan atas (hanya muncul jika sudah ada foto)
+          // Tombol X (hapus) jika ada foto dari kamera
           if (photo != null)
             Positioned(
               top: 5,
@@ -977,11 +1070,7 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
                     color: Colors.black.withOpacity(0.5),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
-                    Icons.close,
-                    color: Colors.white,
-                    size: 20,
-                  ),
+                  child: const Icon(Icons.close, color: Colors.white, size: 20),
                 ),
               ),
             ),
