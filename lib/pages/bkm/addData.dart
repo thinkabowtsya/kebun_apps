@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_3/pages/widget/essential.dart';
+import 'package:flutter_application_3/providers/bkm/absensi_provider.dart';
 import 'package:flutter_application_3/providers/bkm/bkm_provider.dart';
+import 'package:flutter_application_3/providers/bkm/kehadiran_provider.dart';
 import 'package:flutter_application_3/providers/bkm/prestasi_provider.dart';
 import 'package:flutter_application_3/providers/tambahdata_bkm_provider.dart';
 // import 'package:flutter_application_3/services/FormMode.dart';
 import 'package:flutter_application_3/services/notransaksihelper.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum BkmFormMode {
   add,
@@ -70,13 +73,16 @@ class AddDataBody extends StatefulWidget {
 
 class _AddDataBodyState extends State<AddDataBody> {
   final TextEditingController _noTransaksiController = TextEditingController();
-
+  String _username = '';
   @override
   void initState() {
     super.initState();
     _selectedDate = widget.initialTanggal ?? DateTime.now();
+    _loadUsername();
     final prestasiProvider =
         Provider.of<PrestasiProvider>(context, listen: false);
+    final absensiProvider =
+        Provider.of<AbsensiProvider>(context, listen: false);
     Future.microtask(() {
       prestasiProvider.fetchPrestasiByTransaksi(_noTransaksiController.text);
     });
@@ -94,6 +100,9 @@ class _AddDataBodyState extends State<AddDataBody> {
         final fetchTransaksi = await prestasiProvider
             .fetchPrestasiByTransaksi(_noTransaksiController.text);
 
+        await absensiProvider.fetchLoadAbsensi(
+            notrans: _noTransaksiController.text);
+
         // if (fetchHeader.isNotEmpty) {
         provider.setInitialHeaderData(fetchHeader[0]);
 
@@ -104,7 +113,6 @@ class _AddDataBodyState extends State<AddDataBody> {
           _selectedDate = provider.selectedDate;
         });
       } else {
-        print('add');
         provider.resetForm();
         provider.fetchDataMandorWithDefault();
         provider.fetchDataMandor1();
@@ -119,12 +127,44 @@ class _AddDataBodyState extends State<AddDataBody> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final provider = Provider.of<AbsensiProvider>(context, listen: false);
+    final bkmProv = Provider.of<BkmProvider>(context, listen: false);
+
+    // print(provider.shouldRefresh);
+    if (provider.shouldRefresh) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        provider.fetchLoadAbsensi(
+          notrans: _noTransaksiController.text,
+        );
+        // provider.fetchKehadiranByTransaksi(
+        //     notransaksi: noTransaksi,
+        //     kodekegiatan: kodekegiatanTemp,
+        //     kodeorg: kodeorgTemp,
+        //     kelompok: luasareaproduktifTemp.toString(),
+        //     luasareaproduktif: luaspokokTemp.toString());
+        provider.setShouldRefresh(false);
+      });
+    }
+    // print('refresh material');
+  }
+
+  @override
   void dispose() {
     _noTransaksiController.dispose();
     super.dispose();
   }
 
   DateTime _selectedDate = DateTime.now();
+
+  Future<void> _loadUsername() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _username = prefs.getString('username')?.trim() ?? '';
+    });
+  }
 
   Future<void> _showDatePicker() async {
     final picked = await showDatePicker(
@@ -147,9 +187,10 @@ class _AddDataBodyState extends State<AddDataBody> {
     String noTrans = _noTransaksiController.text;
 
     final data = context.watch<PrestasiProvider>().prestasiList;
+    final dataAbsensi = context.watch<AbsensiProvider>().absensiFull;
 
-    return Consumer2<BkmProvider, PrestasiProvider>(
-      builder: (context, provider, prestasiProvider, _) {
+    return Consumer3<BkmProvider, PrestasiProvider, AbsensiProvider>(
+      builder: (context, provider, prestasiProvider, absensiProvider, _) {
         if (provider.isLoadingMandor ||
             provider.isLoadingMandor1 ||
             provider.isLoadingAsisten) {
@@ -304,7 +345,7 @@ class _AddDataBodyState extends State<AddDataBody> {
                       await Navigator.of(context).pushNamed('/add-absensi');
                     },
                   ),
-                  _buildPrestasiSection()
+                  _buildPrestasiSection(context, absensiProvider, dataAbsensi)
                 ],
               ],
             ),
@@ -366,7 +407,8 @@ class _AddDataBodyState extends State<AddDataBody> {
     );
   }
 
-  Widget _buildPrestasiSection() {
+  Widget _buildPrestasiSection(
+      BuildContext context, AbsensiProvider absensiProvider, datas) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
@@ -380,11 +422,35 @@ class _AddDataBodyState extends State<AddDataBody> {
           DataColumn(label: Text('Keterangan                      ')),
           DataColumn(label: Text('Jumlah                   ')),
         ],
-        rows: const [
-          DataRow(cells: [
-            DataCell(Text('')),
-            DataCell(Text('')),
-          ]),
+        rows: [
+          ...datas.map((item) {
+            return DataRow(cells: [
+              DataCell(Text(item['keterangan'].toString())),
+              DataCell(Text(item['jumlah'].toString())),
+            ]);
+          }).toList(),
+          DataRow(
+            color: WidgetStateProperty.all(Colors.grey[300]),
+            cells: [
+              const DataCell(
+                Text(
+                  'TOTAL',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              DataCell(
+                Text(
+                  absensiProvider.absensiFull
+                      .fold<num>(
+                        0,
+                        (sum, item) => sum + (item['jumlah'] ?? 0),
+                      )
+                      .toString(),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -426,15 +492,6 @@ class _AddDataBodyState extends State<AddDataBody> {
                                 final providerBkm = Provider.of<BkmProvider>(
                                     context,
                                     listen: false);
-                                // final notrans = providerBkm.notransaksi;
-
-                                // final List<Map<String, dynamic>> result =
-                                //     await prestasiProvider
-                                //         .fetchPrestasiByTransaksi(notrans!);
-
-                                // final data = result[0];
-
-                                // final firstItem = result[0];
 
                                 String kodekegiatan = item['kodekegiatan'];
                                 String kodeorg = item['kodeorg'];
@@ -444,18 +501,20 @@ class _AddDataBodyState extends State<AddDataBody> {
 
                                 providerBkm.setNotransaksi(
                                     _noTransaksiController.text);
-
                                 providerBkm.setKodekegiatantemp(kodekegiatan);
                                 providerBkm.setKodeorgtemp(kodeorg);
                                 providerBkm
                                     .setLuasproduktiftemp(luasareaproduktif);
                                 providerBkm.setLuaspokoktemp(jumlahpokok);
 
-                                print(providerBkm.kodekegiatanTemp);
-                                // Navigator.pop(context);
+                                print(providerBkm.selectedMandor1Value);
 
-                                await Navigator.of(context)
-                                    .pushNamed('/edit-prestasi');
+                                await Navigator.of(context).pushNamed(
+                                  '/edit-prestasi',
+                                  arguments: {
+                                    'kodekegiatan': item['kodekegiatan'],
+                                  },
+                                );
                               },
                             ),
                             ListTile(

@@ -163,6 +163,7 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
                       kehadiranProvider.loadKaryawan(value);
                       setState(() {
                         _selectedPresenceOption = value!;
+                        kehadiranProvider.loadKaryawan(1);
                       });
                     },
                   ),
@@ -179,16 +180,16 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
                       });
                     },
                   ),
-                  RadioListTile(
-                    value: 3,
-                    groupValue: _selectedPresenceOption,
-                    title: const Text("Scan Jari"),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedPresenceOption = value!;
-                      });
-                    },
-                  ),
+                  // RadioListTile(
+                  //   value: 3,
+                  //   groupValue: _selectedPresenceOption,
+                  //   title: const Text("Scan Jari"),
+                  //   onChanged: (value) {
+                  //     setState(() {
+                  //       _selectedPresenceOption = value!;
+                  //     });
+                  //   },
+                  // ),
                 ],
               ),
               const SizedBox(height: 10),
@@ -213,6 +214,25 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
                   hint: const Text("Pilih Karyawan"),
                 ),
               ),
+              const SizedBox(height: 10),
+              if (kehadiranProvider.showDetail) ...[
+                Text(
+                  "Basis : ${kehadiranProvider.nilaiBasis <= 0 ? 0 : kehadiranProvider.nilaiBasis}",
+                  style: const TextStyle(fontSize: 15),
+                ),
+                Text(
+                  "Extra Fooding : ${kehadiranProvider.extrafooding <= 0 ? 0 : kehadiranProvider.extrafooding}",
+                  style: const TextStyle(fontSize: 15),
+                ),
+                Text(
+                  "Premi Lebih Basis : ${kehadiranProvider.premilebihbasis <= 0 ? 0 : kehadiranProvider.premilebihbasis}",
+                  style: const TextStyle(fontSize: 15),
+                ),
+                Text(
+                  "Hasil Premi Lebih Basis : ${kehadiranProvider.premilebihbasis <= 0 ? 0 : kehadiranProvider.premilebihbasis}",
+                  style: const TextStyle(fontSize: 15),
+                ),
+              ],
               const SizedBox(height: 10),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -248,28 +268,40 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
                                 _hasilKerjaController.text);
                           }
 
-                          _validate(
-                              provider: prestasiProvider,
+                          _checkPremiBkm(
+                              provider: kehadiranProvider,
+                              kodekegiatan: provider.kodekegiatanTemp,
                               hasilkerja: _hasilKerjaController.text,
-                              modeValidate: 'bkmHasilKerja');
+                              kodeblok: provider.kodeorgTemp,
+                              karyawan: selectedKaryawan,
+                              tglbkm: provider.selectedDate,
+                              modeValidate: 'bkmHasilKerja',
+                              hkController: _hkController,
+                              hasilKerjaController: _hasilKerjaController,
+                              extrafoodingController: _extrafoodingController);
 
-                          if (selectedKaryawan == null) {
-                            _hasilKerjaController.text = '0';
-                            showDialog(
-                              context: context,
-                              useRootNavigator: false,
-                              builder: (_) => AlertDialog(
-                                title: const Text('Validasi Gagal'),
-                                content: const Text('karyawan wajib diisi'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    child: const Text('OK'),
-                                  )
-                                ],
-                              ),
-                            );
-                          }
+                          // _validate(
+                          //     provider: prestasiProvider,
+                          //     hasilkerja: _hasilKerjaController.text,
+                          //     modeValidate: 'bkmHasilKerja');
+
+                          // if (selectedKaryawan == null) {
+                          //   _hasilKerjaController.text = '0';
+                          //   showDialog(
+                          //     context: context,
+                          //     useRootNavigator: false,
+                          //     builder: (_) => AlertDialog(
+                          //       title: const Text('Validasi Gagal'),
+                          //       content: const Text('karyawan wajib diisi'),
+                          //       actions: [
+                          //         TextButton(
+                          //           onPressed: () => Navigator.pop(context),
+                          //           child: const Text('OK'),
+                          //         )
+                          //       ],
+                          //     ),
+                          //   );
+                          // }
                         },
                       ),
                       _InputFieldCard(
@@ -277,11 +309,15 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
                         label: 'HK',
                         labelHeader: 'HK',
                         controller: _hkController,
-                        enabled: _isHasilKerjaValid,
+                        enabled: kehadiranProvider.bkmhk,
                         onChanged: (val) {
-                          _validate(
-                              provider: prestasiProvider,
+                          _checkPremiBkm(
+                              provider: kehadiranProvider,
+                              kodekegiatan: provider.kodekegiatanTemp,
                               bkmHK: _hkController.text,
+                              kodeblok: provider.kodeorgTemp,
+                              karyawan: selectedKaryawan,
+                              tglbkm: provider.selectedDate,
                               modeValidate: 'bkmHK');
                         },
                       ),
@@ -309,7 +345,7 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
                   String premi = _premiController.text;
                   String extrafooding = _extrafoodingController.text;
                   // print('press');
-                
+
                   final result = _submit(
                       provider: provider,
                       prestasiprovider: prestasiProvider,
@@ -463,6 +499,71 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
     return true;
   }
 
+  Future<bool> _checkPremiBkm({
+    required KehadiranProvider provider,
+    String? kodekegiatan,
+    String? hasilkerja,
+    String? kodeblok,
+    String? karyawan,
+    String? bkmHK,
+    String? modeValidate,
+    required DateTime tglbkm,
+    TextEditingController? hkController,
+    TextEditingController? hasilKerjaController,
+    TextEditingController? extrafoodingController,
+  }) async {
+    int tahun = int.tryParse(tglbkm.toString()) ?? DateTime.now().year;
+    int gajipokok = 0;
+    int tahuntanam = 0;
+    String statusblok = '';
+
+    // final errors = <String>[];
+
+    final hasilKerjaVal = double.tryParse(hasilkerja ?? '');
+    final hkVal = double.tryParse(bkmHK ?? '');
+
+    final errors = await provider.validatePremiBkmLogic(
+        kodekegiatan: kodekegiatan,
+        hasilkerja: hasilKerjaVal,
+        kodeblok: kodeblok,
+        karyawan: karyawan,
+        bkmHK: hkVal,
+        modeValidate: modeValidate,
+        tahunbkm: tahun,
+        hkController: hkController,
+        hasilKerjaController: hasilKerjaController,
+        extrafoodingController: extrafoodingController);
+
+    if (errors.isNotEmpty) {
+      // Reset field sesuai mode validasi
+      if (modeValidate == 'bkmHK' && hkController != null) {
+        hkController.text = '0';
+      } else if (modeValidate == 'bkmHasilKerja' &&
+          hasilKerjaController != null) {
+        hasilKerjaController.text = '0';
+      }
+
+      await showDialog(
+        context: context,
+        useRootNavigator: false,
+        builder: (_) => AlertDialog(
+          title: const Text('Validasi Gagal'),
+          content: Text(errors.join('\n')),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            )
+          ],
+        ),
+      );
+
+      return false;
+    }
+
+    return true;
+  }
+
   Future<bool> _validate(
       {required PrestasiProvider provider,
       String? hasilkerja,
@@ -478,6 +579,7 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
         errors.add('HK tidak boleh kurang dari 0!!');
         _hkController.text = '0';
         _extrafoodingController.text = '0';
+       
       }
     } else if (modeValidate == 'bkmHasilKerja') {
       if (hasilKerjaVal == null || hasilKerjaVal < 0) {

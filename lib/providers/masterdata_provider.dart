@@ -190,6 +190,7 @@ class MasterdataProvider with ChangeNotifier {
 
   Future<void> fetchKemandoran() async {
     try {
+      print('fetch kemandoran');
       _kemandorans = await _masterRepository.getKemandoran();
       print("Fetched ${_kemandorans.length} kemandoran");
       notifyListeners();

@@ -186,9 +186,11 @@ class MasterData {
     List<Klasifikasi> klasifikasiList =
         listKlasifikasi.map((i) => Klasifikasi.fromJson(i)).toList();
 
-    var listKemandoran = json['kemandoran'] as List? ?? [];
+    var listKemandoran = json['kebun_5mandor'] as List? ?? [];
     List<Kemandoran> kemandoranList =
         listKemandoran.map((i) => Kemandoran.fromJson(i)).toList();
+
+    // print(listKemandoran);
 
     var listKemandoranblok = json['kemandoranblok'] as List? ?? [];
     List<KemandoranBlok> kemandoranblokList =

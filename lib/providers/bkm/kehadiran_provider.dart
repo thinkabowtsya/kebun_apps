@@ -12,8 +12,7 @@ class KehadiranProvider with ChangeNotifier {
   List<Map<String, dynamic>> get karyawan => _karyawan;
   String? get selectedKaryawanValue => _selectedKaryawanValue;
 
-  // === DATA FIELD ===
-  String filter = 'perdivisi'; // regional, perdivisi, fingerprint
+  String filter = 'perdivisi';
 
   String? _selectedKaryawan;
   int _hasilKerja = 0;
@@ -21,14 +20,14 @@ class KehadiranProvider with ChangeNotifier {
   int _premi = 0;
   int _extraFooding = 0;
   int _premiLebihBasis = 0;
-  int _nilaiBasis = 0;
+  double _nilaiBasis = 0;
   final int _overtime = 0;
   int _tahuntanam = 0;
+  bool _showDetail = false;
 
   String? _bkmOvertime;
   String _bkmPLB = '0';
 
-  // === META FIELD ===
   String _satuanKerja = '';
   String _satuanPremi = '';
   String _statusBlok = '';
@@ -42,21 +41,19 @@ class KehadiranProvider with ChangeNotifier {
 
   List<Map<String, dynamic>> get kehadiranList => _kehadiranList;
 
-  // bool _inputOtomatis = false;
-
-  // === UI CONTROL ===
   bool _isPremiEnabled = false;
   bool _isHkEnabled = true;
   final bool _isCheckboxVisible = false;
   final bool _isPLBVisible = false;
 
+  bool get showDetail => _showDetail;
   String? get selectedKaryawan => _selectedKaryawan;
   int get hasilKerja => _hasilKerja;
   int get hk => _hk;
   int get premi => _premi;
   int get extrafooding => _extraFooding;
   int get premilebihbasis => _premiLebihBasis;
-  int get nilaiBasis => _nilaiBasis;
+  double get nilaiBasis => _nilaiBasis;
   int get overtime => _overtime;
   int get tahuntanam => _tahuntanam;
   String get statusblok => _statusBlok;
@@ -81,7 +78,6 @@ class KehadiranProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // === INITIALIZATION ===
   void initialize({
     required String? notransaksi,
     required String? kodeKegiatan,
@@ -92,9 +88,7 @@ class KehadiranProvider with ChangeNotifier {
     required int? extrafooding,
     required int tahun,
     required String statusblok,
-    // bisa lanjut tambahkan sesuai kebutuhan
   }) async {
-    // Simulasi fetch dari DB Cordova
     final Database? db = await _dbHelper.database;
     if (db == null) return;
 
@@ -142,7 +136,6 @@ class KehadiranProvider with ChangeNotifier {
       thntanamLast = t;
     }
 
-    // === 4. Query berdasarkan status blok
     String queryPremi = "SELECT * FROM kebun_5premibkm WHERE kodekegiatan = ?";
     List<String?> params = [kodeKegiatan];
 
@@ -161,15 +154,22 @@ class KehadiranProvider with ChangeNotifier {
     }
 
     final resultPremi = await db.rawQuery(queryPremi, params);
-
+    _showDetail = false;
     if (resultPremi.isNotEmpty) {
       final row = resultPremi.first;
+
       setPremiValues(
-        nilaiBasis: int.tryParse(row['basis'].toString()) ?? 0,
+        nilaiBasis: double.parse(row['basis'].toString()),
         extraFooding: int.tryParse(row['extrafooding'].toString()) ?? 0,
         premiLebihBasis: int.tryParse(row['premilebihbasis'].toString()) ?? 0,
       );
+
+      _showDetail = true;
+      notifyListeners();
     }
+
+    print('result premi');
+    print(resultPremi);
 
     String query = '''
       SELECT b.satuan, b.satuan as satuanpremi
@@ -187,7 +187,7 @@ class KehadiranProvider with ChangeNotifier {
 
       final String satuan = row['satuan']?.toString() ?? '';
       final String satuanPremi = row['satuanpremi']?.toString() ?? '';
-      print(satuan);
+
       setSatuanValues(
         satuan: satuan,
         satuanpremi: satuanPremi,
@@ -195,22 +195,11 @@ class KehadiranProvider with ChangeNotifier {
     } else {
       setSatuanValues(satuan: '', satuanpremi: '');
     }
-    // print(_isHkEnabled);
 
     setExtraFoodingHide(extrafooding);
 
     notifyListeners();
   }
-
-  // List<String> validateSubmit({
-  //   required String? hasilkerjaText,
-  //   required String? bkmPremiText,
-  //   required String? bkmHKText,
-  // }) {
-  //   final List<String> errors = [];
-
-  //   return errors;
-  // }
 
   void setSatuanValues({required String satuan, required String satuanpremi}) {
     _satuanKerja = satuan;
@@ -238,7 +227,7 @@ class KehadiranProvider with ChangeNotifier {
   }
 
   void setPremiValues({
-    required int nilaiBasis,
+    required double nilaiBasis,
     required int extraFooding,
     required int premiLebihBasis,
   }) {
@@ -254,7 +243,6 @@ class KehadiranProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // === FORM HANDLER ===
   void setFilter(String value) {
     filter = value;
     notifyListeners();
@@ -290,16 +278,6 @@ class KehadiranProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // void toggleOtomatis(bool value) {
-  //   inputOtomatis = value;
-  //   if (inputOtomatis) {
-  //     _hasilKerja = nilaiBasis;
-  //   } else {
-  //     _hasilKerja = 0;
-  //   }
-  //   notifyListeners();
-  // }
-
   void setSelectedKaryawanValue(String value) {
     _selectedKaryawanValue = value;
     notifyListeners();
@@ -313,15 +291,13 @@ class KehadiranProvider with ChangeNotifier {
       String karyawanPermandor = '';
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       var mandorid = prefs.getString('karyawanid');
-      // print('method load');
-      // print(value);
 
-      if (value != null) {
-        karyawanPermandor = 'and mandorid = $mandorid';
+      if (value == 2) {
+        karyawanPermandor = 'and mandorid = "$mandorid"';
       }
 
       String query = '''
-      SELECT a.* FROM datakaryawan a left join kemandoran b on a.karyawanid = b.karyawanid where a.perawatan = '1'  and a.subbagian != ' ' and a.gajipokok != 0 order by namakaryawan
+      SELECT a.* FROM datakaryawan a left join kemandoran b on a.karyawanid = b.karyawanid where a.perawatan = '1' $karyawanPermandor  and a.subbagian != ' ' and a.gajipokok != 0 order by namakaryawan
       ''';
 
       final result = await db.rawQuery(query);
@@ -390,7 +366,6 @@ class KehadiranProvider with ChangeNotifier {
       }
     }
 
-    // Cek Extra Fooding
     double totalExtraFooding =
         jumlahExtraFooding + (double.tryParse(bkmexstrafooding ?? '0') ?? 0.0);
 
@@ -403,7 +378,6 @@ class KehadiranProvider with ChangeNotifier {
       }
     }
 
-    // int bkmhkValue = int.parse(bkmhk);
     double bkmhkDouble = bkmhk;
 
     double jmlhHK = jhk.toDouble() + bkmhkDouble;
@@ -413,7 +387,6 @@ class KehadiranProvider with ChangeNotifier {
     double jmlhk = jhk + bkmhkDouble;
     double max = double.parse((1.0 - jhk).toStringAsFixed(2));
 
-    // print(max);
     if (jmlhk > 1.0) {
       errors.add(
           "Karyawan ini sudah ada di transaksi lain ($jhk HK), Max Input $max");
@@ -428,7 +401,6 @@ class KehadiranProvider with ChangeNotifier {
 
     final resultCheckLuasBlok = await db.rawQuery(strCheckLuasBlok);
 
-    // print(resultCheckLuasBlok);
     double luasareaproduktif = 0.0;
     double luasblok = 0.0;
 
@@ -477,10 +449,8 @@ class KehadiranProvider with ChangeNotifier {
 
       final strGResult = await db.rawQuery(strG);
 
-      // print(strGResult);
       double jhk = 0.0;
       double itsHk = 0.0;
-      // print(strGResult);
 
       if (strGResult.isNotEmpty) {
         for (var row in strGResult) {
@@ -491,9 +461,7 @@ class KehadiranProvider with ChangeNotifier {
       }
 
       itsHk += bkmhk;
-      // print(itsHk);
-      // print(itsHk <= 1.0);
-      print(errors);
+
       if (itsHk <= 1.0) {
         if (update == true) {
           await db.rawQuery(strUPTFirst);
@@ -510,8 +478,6 @@ class KehadiranProvider with ChangeNotifier {
         }
       }
     }
-
-    // print(update);
 
     notifyListeners();
     return errors;
@@ -552,8 +518,7 @@ class KehadiranProvider with ChangeNotifier {
   ''';
 
     final result = await db.rawQuery(strSelect);
-    print('result');
-    print(strSelect);
+
     const strKebun =
         ''' select * from kebun_kehadiran order by notransaksi desc''';
 
@@ -561,13 +526,11 @@ class KehadiranProvider with ChangeNotifier {
 
     _kehadiranList = result;
 
-    print(_kehadiranList);
     notifyListeners();
     return value[0];
   }
 
   void resetForm() {
-    print('reset');
     _selectedKaryawanValue = null;
 
     notifyListeners();
@@ -590,6 +553,171 @@ class KehadiranProvider with ChangeNotifier {
 
     print('sudah selesai delete');
     _shouldRefresh = true;
+
+    notifyListeners();
+  }
+
+  Future<List<String>> validatePremiBkmLogic({
+    required String? kodekegiatan,
+    required double? hasilkerja,
+    required String? modeValidate,
+    required String? kodeblok,
+    required String? karyawan,
+    required double? bkmHK,
+    required int? tahunbkm,
+    TextEditingController? hkController,
+    TextEditingController? hasilKerjaController,
+    TextEditingController? extrafoodingController,
+  }) async {
+    final db = await _dbHelper.database;
+    if (db == null) return [];
+
+    final errors = <String>[];
+
+    final hasilKerjaVal = hasilkerja;
+    final hkVal = bkmHK;
+
+    if (modeValidate == 'bkmHK') {
+      if (hkVal == null || hkVal < 0) {
+        errors.add('HK tidak boleh kurang dari 0!!');
+      }
+    } else if (modeValidate == 'bkmHasilKerja') {
+      if (hasilKerjaVal == null || hasilKerjaVal < 0) {
+        errors.add('Hasil Kerja tidak boleh kurang dari 0/Kosong!!');
+        _isHkEnabled = true;
+      }
+    }
+
+    double hasilkerjaVal = double.tryParse(hasilkerja.toString()) ?? 0;
+    hasilkerjaVal = (hasilkerjaVal < 0) ? 0 : hasilkerjaVal;
+
+    if (karyawan == '') {
+      errors.add(" Karyawan wajib dipilih");
+    }
+
+    String qrytahuntanam =
+        ''' SELECT luasareaproduktif, jumlahpokok, tahuntanam, statusblok from setup_blok where kodeblok='$kodeblok'   ''';
+
+    final resultTahunTanam = await db.rawQuery(qrytahuntanam);
+
+    final row = resultTahunTanam.first;
+
+    int tahuntanam = int.tryParse(row['tahuntanam'].toString()) ?? 0;
+    String statusblok = row['statusblok'].toString();
+    double jumlahPokok = double.tryParse(row['jumlahpokok'].toString()) ?? 0.0;
+    double luasareaproduktif =
+        double.tryParse(row['luasareaproduktif'].toString()) ?? 0.0;
+
+    double hasil =
+        (luasareaproduktif != 0) ? (jumlahPokok / luasareaproduktif) : 0.0;
+
+    if (_satuanKerja == 'PKK') {
+      double hasil2 = (hasil != 0) ? (hasilkerjaVal / hasil) : 0.0;
+
+      hasil2 = double.parse(hasil2.toStringAsFixed(2));
+
+      if (hasil2 <= 0) {
+        hasil2 = 0.0;
+      }
+    }
+
+    final result = await db.rawQuery(
+      "SELECT tahuntanam FROM kebun_5premibkm WHERE kodekegiatan = ?",
+      [kodekegiatan],
+    );
+
+    int lengthD = 0;
+    int lengthD2 = result.length;
+    String thntanamLast = '';
+    String thntanam0 = '';
+
+    if (result.isNotEmpty) {
+      for (var row in result) {
+        final tahun = row['tahuntanam'].toString();
+        lengthD++;
+
+        thntanamLast = tahun;
+
+        if (tahun == '0') {
+          thntanam0 = tahun;
+        }
+      }
+    }
+
+    final resultPremi = await db.rawQuery(
+      "SELECT premi FROM setup_kegiatan WHERE kodekegiatan = ?",
+      [kodekegiatan],
+    );
+    final rowPremi = resultPremi.first;
+    int valPremi = int.parse(rowPremi['premi'].toString());
+
+    final resultGajiPokok = await db
+        .rawQuery("SELECT gajipokok from datakaryawan where nik= '$karyawan' ");
+    final rowGajiPokok = resultGajiPokok.first;
+    int valGajiPokok = int.parse(rowGajiPokok['gajipokok'].toString());
+
+    // print(resultGajiPokok);
+
+    final usiaTanam = (tahunbkm! + 1) - tahuntanam;
+
+    String kebunPremi =
+        ''' SELECT * FROM kebun_5premibkm where kodekegiatan = '$kodekegiatan' ''';
+
+    if (statusblok == 'TBM') {
+      if (thntanam0 == '0') {
+        kebunPremi += 'limit 1';
+      } else {
+        kebunPremi += "and tahuntanam= '$usiaTanam' limit 1";
+      }
+    } else if (statusblok == 'TM') {
+      if (thntanam0 == '0') {
+        kebunPremi += 'limit 1';
+      } else if (thntanamLast == '28') {
+        kebunPremi +=
+            " AND tahuntanam <= '$usiaTanam' ORDER BY tahuntanam DESC LIMIT 1";
+      } else {
+        kebunPremi += "and tahuntanam= '$usiaTanam' limit 1";
+      }
+    } else {
+      kebunPremi += 'limit 1';
+    }
+
+    final resultKebunpremi = await db.rawQuery(kebunPremi);
+    final rowKebunPremi = resultKebunpremi.first;
+
+    final double basis =
+        double.tryParse(rowKebunPremi['basis'].toString()) ?? 0.0;
+    final double premiBasis =
+        double.tryParse(rowKebunPremi['premibasis'].toString()) ?? 0.0;
+    final double premiLebihBasis =
+        double.tryParse(rowKebunPremi['premilebihbasis'].toString()) ?? 0.0;
+    final int extraFooding =
+        int.tryParse(rowKebunPremi['extrafooding'].toString()) ?? 0;
+
+    print("Result Kebun Premi: $basis");
+
+    if (basis == 0) {
+      _isHkEnabled = false;
+      print('iya basis 0 => field atau button bisa di-disable');
+      // contoh: kehadiranProvider.setSomeState(disable: true);
+    }
+
+    if (hasilkerjaVal > basis) {
+      double jml = (((hasilkerja! - basis) / basis) * (valGajiPokok / 25));
+      int jmlRounded = jml.round();
+
+      print(jmlRounded);
+      hkController?.text = '1';
+      extrafoodingController?.text = '$extraFooding';
+      _isHkEnabled = false;
+      // lakukan kalkulasi premi lebih basis di sini
+    }
+
+    return errors;
+  }
+
+  void setHkEnable(bool value) {
+    _isHkEnabled = value;
 
     notifyListeners();
   }

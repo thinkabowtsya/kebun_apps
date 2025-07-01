@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_application_3/services/db_helper.dart';
@@ -35,8 +36,10 @@ class PrestasiProvider with ChangeNotifier {
   String? get selectedKegiatanValue => _selectedKegiatanValue;
 
   List<Map<String, dynamic>> _prestasiList = [];
+  List<Map<String, dynamic>> _photoList = [];
 
   List<Map<String, dynamic>> get prestasiList => _prestasiList;
+  List<Map<String, dynamic>> get photoList => _photoList;
 
   String _hasilKerjaPrestasi = '';
   String _jumlahhkprestasi = '';
@@ -337,8 +340,8 @@ class PrestasiProvider with ChangeNotifier {
   }
 
   Future<void> selesaiPhoto({
-    required File image1,
-    required File image2,
+    required Uint8List image1,
+    required Uint8List image2,
     required String? kodekegiatan,
     required String? kodeorg,
     required String? notrans,
@@ -352,8 +355,8 @@ class PrestasiProvider with ChangeNotifier {
     final lng_fotoakhir = prefs.getDouble('last_longitude');
     final username = prefs.getString('username');
 
-    final String base64Image1 = base64Encode(await image1.readAsBytes());
-    final String base64Image2 = base64Encode(await image2.readAsBytes());
+    final String base64Image1 = base64Encode(await image1);
+    final String base64Image2 = base64Encode(await image2);
 
     try {
       await db.execute('BEGIN TRANSACTION');
@@ -401,9 +404,8 @@ class PrestasiProvider with ChangeNotifier {
     SELECT 
       d.jumlahpokok,
       d.luasareaproduktif,
-      a.fotoStart2,
-      a.jumlahhasilkerja,
-      a.fotoend2,
+      MAX(a.jumlahhasilkerja) AS jumlahhasilkerja,
+      MAX(a.fotoend2) AS fotoend2,
       a.kelompok, 
       b.satuan,
       a.kodekegiatan,
@@ -428,6 +430,29 @@ class PrestasiProvider with ChangeNotifier {
       final result = await db.rawQuery(query);
 
       _prestasiList = result;
+      notifyListeners();
+      return result;
+    } catch (e) {
+      await db.execute('ROLLBACK');
+      debugPrint('Error: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchPhotoAkhir(
+      String kodekegiatan, String kodeorg) async {
+    final Database? db = await _dbHelper.database;
+    if (db == null) return [];
+
+    try {
+      String query = """
+    SELECT jumlahhasilkerja AS jumlahhasilkerja, fotoend2 AS fotoend2 FROM kebun_prestasi 
+      WHERE kodekegiatan = '$kodekegiatan' and kodeorg='$kodeorg'
+    """;
+
+      final result = await db.rawQuery(query);
+
+      _photoList = result;
       notifyListeners();
       return result;
     } catch (e) {

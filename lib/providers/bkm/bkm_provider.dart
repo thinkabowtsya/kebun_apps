@@ -26,6 +26,9 @@ class BkmProvider with ChangeNotifier {
   late DateTime _selectedDate;
   DateTime get selectedDate => _selectedDate;
 
+  List<Map<String, dynamic>> _bkmListing = [];
+  List<Map<String, dynamic>> _kehadiranUmumListing = [];
+
   String? _noTransaksi;
   String? _kodekegiatanTemp;
   String? _kodeorgTemp;
@@ -43,6 +46,9 @@ class BkmProvider with ChangeNotifier {
   List<Map<String, dynamic>> get asisten => _asisten;
   bool get isLoadingAsisten => _isLoadingAsisten;
   String? get selectedAsistenValue => _selectedAsistenValue;
+
+  List<Map<String, dynamic>> get bkmListing => _bkmListing;
+  List<Map<String, dynamic>> get kehadiranUmumListing => _kehadiranUmumListing;
 
   String _bkmklasifikasi = '';
   String _bkmnomor = '';
@@ -367,11 +373,18 @@ class BkmProvider with ChangeNotifier {
   }
 
   bool _shouldRefresh = false;
+  bool _shouldRefreshDelete = false;
 
   bool get shouldRefresh => _shouldRefresh;
+  bool get shouldRefreshDelete => _shouldRefreshDelete;
 
   void setShouldRefresh(bool value) {
     _shouldRefresh = value;
+    notifyListeners();
+  }
+
+  void setShouldRefreshDelete(bool value) {
+    _shouldRefreshDelete = value;
     notifyListeners();
   }
 
@@ -494,6 +507,87 @@ class BkmProvider with ChangeNotifier {
     final result = await db.rawQuery(query);
 
     _bkmList = result;
+    notifyListeners();
+  }
+
+  Future<void> lihatBkm({String? notransaksi}) async {
+    final db = await _dbHelper.database;
+    if (db == null) return;
+
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? username = prefs.getString('username')?.trim();
+
+    String strSelect =
+        '''  SELECT a.*, ifnull((SELECT namakaryawan FROM datakaryawan WHERE karyawanid = a.nikasisten), a.nikasisten) AS asisten, ifnull(b.namakaryawan,a.nikmandor) as mandor, ifnull((SELECT namakaryawan FROM datakaryawan WHERE karyawanid = a.nikmandor1), a.nikmandor1) AS mandor1 FROM kebun_aktifitas a LEFT JOIN datakaryawan b on a.nikmandor=b.karyawanid where a.notransaksi = '$notransaksi' and a.updateby like '%$username%' order by tanggal desc limit 1  ''';
+
+    final result = await db.rawQuery(strSelect);
+    _bkmListing = result;
+
+    String strKehadiranUmum = '''
+        SELECT 
+          d.namakaryawan, 
+          a.* 
+        FROM kebun_kehadiran a 
+        LEFT JOIN datakaryawan d ON a.nik = d.nik 
+        WHERE a.notransaksi = '$notransaksi' 
+          AND a.kodekegiatan = 'ABSENSI' 
+        ORDER BY a.lastupdate DESC
+      ''';
+
+    final resultKehadiran = await db.rawQuery(strKehadiranUmum);
+    _kehadiranUmumListing = resultKehadiran;
+
+    notifyListeners();
+  }
+
+  Future<void> deleteBkm(
+      {String? notransaksi, required BuildContext context}) async {
+    final Database? db = await _dbHelper.database;
+    if (db == null) return;
+
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? username = prefs.getString('username')?.trim();
+
+    try {
+      await db.transaction((txn) async {
+        await txn.delete(
+          'kebun_aktifitas',
+          where: 'notransaksi = ? AND updateby LIKE ?',
+          whereArgs: [notransaksi, '%$username%'],
+        );
+
+        await txn.delete(
+          'kebun_prestasi',
+          where: 'notransaksi = ?',
+          whereArgs: [notransaksi],
+        );
+
+        await txn.delete(
+          'kebun_kehadiran',
+          where: 'notransaksi = ?',
+          whereArgs: [notransaksi],
+        );
+
+        await txn.delete(
+          'kebun_pakaimaterial',
+          where: 'notransaksi = ?',
+          whereArgs: [notransaksi],
+        );
+      });
+
+      _shouldRefresh = true;
+
+      if (context.mounted) {
+        Navigator.pop(context, {'success': true});
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Gagal hapus data')));
+      }
+      rethrow;
+    }
+
     notifyListeners();
   }
 }

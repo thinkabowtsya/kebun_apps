@@ -49,7 +49,7 @@ class _BukuKerjaMandorBodyState extends State<BukuKerjaMandorBody>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // print('selected');
+    print('selected');
     // print(selectedDate.toString());
 
     final provider = Provider.of<BkmProvider>(context, listen: false);
@@ -230,6 +230,16 @@ class _BukuKerjaMandorBodyState extends State<BukuKerjaMandorBody>
                                           title: const Text('View'),
                                           onTap: () {
                                             print('detail tap');
+                                            // Navigator.of(context)
+                                            //     .pushNamed('/lihat-bkm');
+
+                                            Navigator.of(context).pushNamed(
+                                              '/lihat-bkm',
+                                              arguments: {
+                                                'noTransaksi':
+                                                    data['notransaksi'],
+                                              },
+                                            );
                                           },
                                         ),
                                         ListTile(
@@ -237,7 +247,47 @@ class _BukuKerjaMandorBodyState extends State<BukuKerjaMandorBody>
                                               color: Colors.red),
                                           title: const Text('Hapus'),
                                           onTap: () async {
-                                            print('tapp3');
+                                            Navigator.pop(
+                                                context); // Tutup bottom sheet dulu
+
+                                            // Tunggu sebentar biar konteks stabil
+                                            await Future.delayed(const Duration(
+                                                milliseconds: 200));
+
+                                            final confirm =
+                                                await showDialog<bool>(
+                                              context: context,
+                                              builder: (context) => AlertDialog(
+                                                title: const Text(
+                                                    'Konfirmasi Hapus'),
+                                                content: const Text(
+                                                    'Yakin ingin menghapus data ini?'),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                            context, false),
+                                                    child: const Text('Batal'),
+                                                  ),
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                            context, true),
+                                                    child: const Text('Hapus'),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+
+                                            if (confirm == true) {
+                                              // print(true);
+                                              await provider.deleteBkm(
+                                                  notransaksi:
+                                                      data['notransaksi'],
+                                                  context: context);
+  
+                                              provider.setShouldRefresh(true);
+                                            }
                                           },
                                         ),
                                       ],

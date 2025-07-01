@@ -953,7 +953,7 @@ class DBHelper {
   Future<void> createkemandoranTableIfNotExists() async {
     Database? db = await database;
 
-    await db?.execute('''DROP TABLE IF EXISTS kemandoran''');
+    // await db?.execute('''DROP TABLE IF EXISTS kemandoran''');
 
     var result = await db?.rawQuery('''
       SELECT name FROM sqlite_master WHERE type='table' AND name='kemandoran';
@@ -973,12 +973,14 @@ class DBHelper {
     Database? db = await database;
 
     List<Map<String, Object?>> rowBatch = kemandoranList.map((kemandoran) {
+      // print('kemandiran lost');
+      // print(kemandoran);
       return {
         'mandorid': kemandoran.mandorid,
         'karyawanid': kemandoran.karyawanid,
       };
     }).toList();
-
+    int insertedRowsCount = 0;
     await db?.transaction((txn) async {
       for (var row in rowBatch) {
         await txn.insert(
@@ -986,8 +988,12 @@ class DBHelper {
           row,
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
+        insertedRowsCount++;
       }
     });
+
+    var result = await db?.rawQuery('SELECT * FROM kemandoran');
+    print("Total rows in kemandoran: ${result?.length}");
   }
 
   Future<void> createkemandoranblokTableIfNotExists() async {
@@ -2118,6 +2124,8 @@ class DBHelper {
     ''';
 
     var result = await db?.rawQuery(sql);
+
+    // print(result);
 
     if (result == null || result.isEmpty) {
       print("No data found in database.");

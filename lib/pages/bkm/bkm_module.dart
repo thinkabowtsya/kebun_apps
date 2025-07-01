@@ -4,6 +4,7 @@ import 'package:flutter_application_3/pages/bkm/addData.dart';
 import 'package:flutter_application_3/pages/bkm/addKehadiran.dart';
 import 'package:flutter_application_3/pages/bkm/addPrestasi.dart';
 import 'package:flutter_application_3/pages/bkm/editPrestasi.dart';
+import 'package:flutter_application_3/pages/bkm/lihatbkm.dart';
 import 'package:flutter_application_3/pages/bkm/material.dart';
 import 'package:flutter_application_3/pages/bkm_page.dart';
 import 'package:flutter_application_3/providers/bkm/absensi_provider.dart';
@@ -62,6 +63,7 @@ class BkmNavigator extends StatelessWidget {
                 page = AddPrestasiPage();
                 break;
               case '/edit-prestasi':
+                final args = settings.arguments as Map<String, dynamic>;
                 page = EditPrestasiPage();
                 break;
               case '/add-kehadiran':
@@ -75,10 +77,17 @@ class BkmNavigator extends StatelessWidget {
                 );
                 break;
               case '/add-material':
-                page = FormMaterialPage();
+                page = const FormMaterialPage();
                 break;
               case '/add-absensi':
-                page = FormAbsensiPage();
+                page = const FormAbsensiPage();
+                break;
+              case '/lihat-bkm':
+                final args = settings.arguments as Map<String, dynamic>;
+                // print(args['noTransaksi']);
+                page = LihatBkm(
+                  notransaksi: args['noTransaksi'],
+                );
                 break;
               default:
                 page = const BukuKerjaMandorPage();
