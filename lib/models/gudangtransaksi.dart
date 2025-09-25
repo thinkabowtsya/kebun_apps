@@ -7,7 +7,7 @@ class GudangTransaksi {
       {required this.afdeling, required this.kodegudang, required this.status});
 
   factory GudangTransaksi.fromJson(Map<String, dynamic> json) {
-    print('model');
+    print('model iya');
     print(json);
     return GudangTransaksi(
       afdeling: json['afdeling'],

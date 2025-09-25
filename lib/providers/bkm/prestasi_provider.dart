@@ -221,8 +221,8 @@ class PrestasiProvider with ChangeNotifier {
   }
 
   Future<void> savePrestasi({
-    required File image1,
-    required File image2,
+    required String image1,
+    required String image2,
     required String noBKM,
     required String kegiatan,
     required String blok,
@@ -235,9 +235,6 @@ class PrestasiProvider with ChangeNotifier {
     final lat_fotoawal = prefs.getDouble('last_latitude');
     final lng_fotoawal = prefs.getDouble('last_longitude');
     final username = prefs.getString('username');
-
-    final String base64Image1 = base64Encode(await image1.readAsBytes());
-    final String base64Image2 = base64Encode(await image2.readAsBytes());
 
     final String hasilKerjaPrestasi =
         _hasilKerjaPrestasi.isNotEmpty ? _hasilKerjaPrestasi : "0";
@@ -258,74 +255,70 @@ class PrestasiProvider with ChangeNotifier {
     if (kelompokResult == null) throw Exception('Kelompok kegiatan null');
 
     try {
-      await db.execute('BEGIN TRANSACTION');
+      // Gunakan transaction agar COMMIT/ROLLBACK otomatis
+      await db.transaction((txn) async {
+        // Validasi transaksi: pastikan header ada dan di-update oleh user ini
+        final checkTrans = await txn.rawQuery('''
+        SELECT * FROM kebun_aktifitas 
+        WHERE notransaksi = ? AND updateby = ?
+      ''', [noBKM, username]);
 
-      // Validasi transaksi
-      final checkTrans = await db.rawQuery('''
-      SELECT * FROM kebun_aktifitas 
-      WHERE notransaksi = ? AND updateby = ?
-    ''', [noBKM, username]);
+        if (checkTrans.isEmpty) {
+          // lempar objek khusus supaya transaction auto-rollback
+          throw {
+            'type': 'validation',
+            'code': 'no_trans',
+            'title': 'Gagal Menyimpan',
+            'message': 'Transaksi belum ada atau belum diupdate oleh user ini.'
+          };
+        }
 
-      if (checkTrans.isEmpty) {
-        await db.execute('ROLLBACK');
-        showDialog(
-          context: context,
-          builder: (_) => const AlertDialog(
-            title: Text('Gagal Menyimpan'),
-            content:
-                Text('Transaksi belum ada atau belum diupdate oleh user ini.'),
-          ),
-        );
-        return;
-      }
+        // Validasi duplikat
+        final checkJmlhHK = await txn.rawQuery('''
+        SELECT * FROM kebun_prestasi 
+        WHERE notransaksi = ? AND kodekegiatan = ? AND kodeorg = ?
+      ''', [noBKM, kegiatan, blok]);
 
-      // Validasi duplikat
-      final checkJmlhHK = await db.rawQuery('''
-      SELECT * FROM kebun_prestasi 
-      WHERE notransaksi = ? AND kodekegiatan = ? AND kodeorg = ?
-    ''', [noBKM, kegiatan, blok]);
+        if (checkJmlhHK.isNotEmpty) {
+          throw {
+            'type': 'validation',
+            'code': 'duplicate',
+            'title': 'Gagal Menyimpan',
+            'message': 'Data prestasi untuk kegiatan dan blok ini sudah ada.'
+          };
+        }
 
-      if (checkJmlhHK.isNotEmpty) {
-        await db.execute('ROLLBACK');
-        showDialog(
-          context: context,
-          builder: (_) => const AlertDialog(
-            title: Text('Gagal Menyimpan'),
-            content:
-                Text('Data prestasi untuk kegiatan dan blok ini sudah ada.'),
-          ),
-        );
-        return;
-      }
+        // Insert (parameterized)
+        await txn.rawInsert('''
+        INSERT INTO kebun_prestasi(
+          notransaksi, nobkm, fotoStart2, kelompok, 
+          kodekegiatan, kodeorg, jumlahhasilkerja, jumlahhk, 
+          updateby, potoawal_lat, potoawal_lat2, 
+          potoawal_long, potoawal_long2, potoawal_alt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ''', [
+          noBKM, // notransaksi
+          image1, // nobkm (mengikuti mapping yang ada di kode lama)
+          image2, // fotoStart2 (ikuti mapping asli)
 
-      // Insert
-      await db.rawInsert('''
-      INSERT INTO kebun_prestasi(
-        notransaksi, nobkm, fotoStart2, kelompok, 
-        kodekegiatan, kodeorg, jumlahhasilkerja, jumlahhk, 
-        updateby, potoawal_lat, potoawal_lat2, 
-        potoawal_long, potoawal_long2, potoawal_alt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', [
-        noBKM,
-        base64Image1,
-        base64Image2,
-        kelompokResult,
-        kegiatan,
-        blok,
-        hasilKerjaPrestasi,
-        jumlahHKPrestasi,
-        username,
-        lat_fotoawal,
-        lat_fotoawal,
-        lng_fotoawal,
-        lng_fotoawal,
-        ''
-      ]);
+          kelompokResult,
+          kegiatan,
+          blok,
+          hasilKerjaPrestasi,
+          jumlahHKPrestasi,
+          username,
+          lat_fotoawal,
+          lat_fotoawal,
+          lng_fotoawal,
+          lng_fotoawal,
+          ''
+        ]);
+        // jika sampai sini tanpa throw -> commit otomatis
+      });
 
-      await db.execute('COMMIT');
       debugPrint('Prestasi berhasil disimpan');
 
+      // setelah commit: kembali ke UI seperti semula
       Navigator.pop(context, {
         'success': true,
         'notransaksi': noBKM,
@@ -333,15 +326,29 @@ class PrestasiProvider with ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      await db.execute('ROLLBACK');
+      // Tangani objek validation yang dilempar untuk menampilkan dialog dan return tanpa rethrow
+      if (e is Map && e['type'] == 'validation') {
+        final title = e['title'] ?? 'Gagal';
+        final message = e['message'] ?? 'Validasi gagal';
+        await showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(title.toString()),
+            content: Text(message.toString()),
+          ),
+        );
+        return;
+      }
+
+      // Untuk error lain: log dan rethrow (sama seperti kode lama yang me-rethrow)
       debugPrint('❌ Error saat simpan prestasi: $e');
       rethrow;
     }
   }
 
   Future<void> selesaiPhoto({
-    required Uint8List image1,
-    required Uint8List image2,
+    required String image1,
+    required String image2,
     required String? kodekegiatan,
     required String? kodeorg,
     required String? notrans,
@@ -355,32 +362,40 @@ class PrestasiProvider with ChangeNotifier {
     final lng_fotoakhir = prefs.getDouble('last_longitude');
     final username = prefs.getString('username');
 
-    final String base64Image1 = base64Encode(await image1);
-    final String base64Image2 = base64Encode(await image2);
+    // print(image2);
 
     try {
-      await db.execute('BEGIN TRANSACTION');
-
-      await db.rawQuery('''
-        UPDATE kebun_prestasi set jumlahhasilkerja = ? ,  fotoend2 = ?, potoakhir_long = ?, potoakhir_long2 = ?, potoakhir_alt = ? ,potoakhir_lat2 = ?  WHERE 
-        notransaksi = ? AND 
-        kodekegiatan = ? AND 
-        kodeorg = ?
+      // gunakan transaction agar COMMIT/ROLLBACK otomatis
+      await db.transaction((txn) async {
+        // gunakan rawUpdate agar intent UPDATE jelas (sama parameter urutannya seperti kode awal)
+        await txn.rawUpdate('''
+        UPDATE kebun_prestasi SET 
+          jumlahhasilkerja = ?, 
+          fotoend2 = ?, 
+          potoakhir_long = ?, 
+          potoakhir_long2 = ?, 
+          potoakhir_alt = ?, 
+          potoakhir_lat2 = ?
+        WHERE 
+          notransaksi = ? AND 
+          kodekegiatan = ? AND 
+          kodeorg = ?
       ''', [
-        base64Image1,
-        base64Image2,
-        lng_fotoakhir,
-        lng_fotoakhir,
-        lat_fotoakhir,
-        lat_fotoakhir,
-        notrans,
-        kodekegiatan,
-        kodeorg
-      ]);
+          image1, // jumlahhasilkerja (sesuai urutan asli)
+          image2, // fotoend2
+          lng_fotoakhir, // potoakhir_long
+          lng_fotoakhir, // potoakhir_long2
+          lat_fotoakhir, // potoakhir_alt
+          lat_fotoakhir, // potoakhir_lat2
+          notrans,
+          kodekegiatan,
+          kodeorg,
+        ]);
+        // jika callback selesai tanpa throw => COMMIT otomatis
+      });
 
-      await db.execute('COMMIT');
       debugPrint('Prestasi berhasil disimpan');
-
+      _shouldRefresh = true;
       Navigator.pop(context, {
         'success': true,
         'notransaksi': notrans,
@@ -388,10 +403,19 @@ class PrestasiProvider with ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      await db.execute('ROLLBACK');
+      // db.transaction otomatis melakukan rollback jika exception dilempar
       debugPrint('❌ Error saat simpan prestasi: $e');
       rethrow;
     }
+  }
+
+  bool _shouldRefresh = false;
+
+  bool get shouldRefresh => _shouldRefresh;
+
+  void setShouldRefresh(bool value) {
+    _shouldRefresh = value;
+    notifyListeners();
   }
 
   Future<List<Map<String, dynamic>>> fetchPrestasiByTransaksi(
@@ -405,7 +429,7 @@ class PrestasiProvider with ChangeNotifier {
       d.jumlahpokok,
       d.luasareaproduktif,
       MAX(a.jumlahhasilkerja) AS jumlahhasilkerja,
-      MAX(a.fotoend2) AS fotoend2,
+
       a.kelompok, 
       b.satuan,
       a.kodekegiatan,
@@ -433,7 +457,7 @@ class PrestasiProvider with ChangeNotifier {
       notifyListeners();
       return result;
     } catch (e) {
-      await db.execute('ROLLBACK');
+      // await db.execute('ROLLBACK');
       debugPrint('Error: $e');
       rethrow;
     }

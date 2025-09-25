@@ -1,22 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_3/pages/basis_norma_page.dart';
 import 'package:flutter_application_3/pages/blok_page.dart';
+import 'package:flutter_application_3/pages/bluetooth_page.dart';
 import 'package:flutter_application_3/pages/karyawan_page.dart';
 import 'package:flutter_application_3/pages/kegiatan_page.dart';
 import 'package:flutter_application_3/pages/kendaraan_page.dart';
 import 'package:flutter_application_3/pages/sinkron_page.dart';
 
-
 // ignore: use_key_in_widget_constructors
 class SetupPage extends StatelessWidget {
   // List data menu
   final List<Map<String, dynamic>> menuItems = [
-    {
-      "title": "Informasi Masuk Aplikasi",
-      "isHeader": false,
-      "page": "informasi"
-    },
-    {"title": "Ubah Sandi", "isHeader": false, "page": "ubahsandi"},
     {"title": "Sinkronisasi", "isHeader": false, "page": "sinkron"},
     {"title": "Printer Bluetooth", "isHeader": false, "page": "printer"},
     {"title": "Finger Setting", "isHeader": false, "page": "finger"},
@@ -39,7 +33,7 @@ class SetupPage extends StatelessWidget {
     } else if (page == 'printer') {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (context) => const BlokPage(),
+          builder: (context) => BluetoothScreen(),
         ),
       );
     } else if (page == 'finger') {

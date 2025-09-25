@@ -1120,14 +1120,14 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
       return false;
     }
 
-    provider.selesaiPhoto(
-      image1: _watermarkedImage1!,
-      image2: _watermarkedImage2!,
-      kodekegiatan: kodekegiatan,
-      kodeorg: kodeorg,
-      notrans: notrans,
-      context: context,
-    );
+    // provider.selesaiPhoto(
+    //   image1: _watermarkedImage1!,
+    //   image2: _watermarkedImage2!,
+    //   kodekegiatan: kodekegiatan,
+    //   kodeorg: kodeorg,
+    //   notrans: notrans,
+    //   context: context,
+    // );
 
     return true;
   }

@@ -27,16 +27,6 @@ class AddDataPage extends StatelessWidget {
     this.initialTanggal,
   });
 
-  // @override
-  // Widget build(BuildContext context) {
-  //   return Scaffold(
-  //     appBar: AppBar(
-  //       title: const Text('Transaksi Baru'),
-  //       backgroundColor: const Color.fromARGB(255, 87, 173, 243),
-  //     ),
-  //     body: const AddDataBody(),
-  //   );
-  // }
   @override
   Widget build(BuildContext context) {
     print(mode);
@@ -94,6 +84,10 @@ class _AddDataBodyState extends State<AddDataBody> {
         _noTransaksiController.text = widget.initialNoTransaksi!;
         _selectedDate = widget.initialTanggal ?? DateTime.now();
 
+        provider.fetchDataMandorWithDefault();
+        provider.fetchDataMandor1();
+        provider.fetchDataAsisten();
+
         final fetchHeader =
             await provider.fetchByTrans(_noTransaksiController.text);
 
@@ -118,8 +112,9 @@ class _AddDataBodyState extends State<AddDataBody> {
         provider.fetchDataMandor1();
         provider.fetchDataAsisten();
         provider.createTableBKM();
-        final notransaksi = await NoTransaksiHelper().generateNoTransaksi();
-        _noTransaksiController.text = notransaksi;
+        // final notransaksi = await NoTransaksiHelper().generateNoTransaksi(nametable: 'kebun_aktifitas');
+        final no1 = await NoTransaksiHelper().generate();
+        _noTransaksiController.text = no1;
 
         // await prestasiProvider.fetchPrestasiByTransaksi(notransaksi);
       }
@@ -131,6 +126,8 @@ class _AddDataBodyState extends State<AddDataBody> {
     super.didChangeDependencies();
 
     final provider = Provider.of<AbsensiProvider>(context, listen: false);
+    final prestasiProvider =
+        Provider.of<PrestasiProvider>(context, listen: false);
     final bkmProv = Provider.of<BkmProvider>(context, listen: false);
 
     // print(provider.shouldRefresh);
@@ -146,6 +143,16 @@ class _AddDataBodyState extends State<AddDataBody> {
         //     kelompok: luasareaproduktifTemp.toString(),
         //     luasareaproduktif: luaspokokTemp.toString());
         provider.setShouldRefresh(false);
+      });
+    }
+
+    if (prestasiProvider.shouldRefresh) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        prestasiProvider.fetchPrestasiByTransaksi(
+          _noTransaksiController.text,
+        );
+
+        prestasiProvider.setShouldRefresh(false);
       });
     }
     // print('refresh material');
@@ -241,9 +248,11 @@ class _AddDataBodyState extends State<AddDataBody> {
                     isExpanded: true,
                     value: provider.selectedMandorValue,
                     items: _buildDropdownItems(provider.mandor),
-                    onChanged: (value) {
-                      provider.setSelectedMandorValue(value.toString());
-                    },
+                    onChanged: widget.mode == BkmFormMode.edit
+                        ? null
+                        : (value) {
+                            provider.setSelectedMandorValue(value.toString());
+                          },
                     hint: const Text("Pilih Mandor"),
                     isDense: false,
                     elevation: 1,
@@ -264,9 +273,11 @@ class _AddDataBodyState extends State<AddDataBody> {
                     isExpanded: true,
                     value: provider.selectedMandor1Value,
                     items: _mandor1Items(provider.mandor1),
-                    onChanged: (value) {
-                      provider.setSelectedMandor1Value(value.toString());
-                    },
+                    onChanged: widget.mode == BkmFormMode.edit
+                        ? null
+                        : (value) {
+                            provider.setSelectedMandor1Value(value.toString());
+                          },
                     hint: const Text("Pilih Mandor 1"),
                     isDense: false,
                     elevation: 1,
@@ -287,9 +298,11 @@ class _AddDataBodyState extends State<AddDataBody> {
                     isExpanded: true,
                     value: provider.selectedAsistenValue,
                     items: _buildAsistenItems(provider.asisten),
-                    onChanged: (value) {
-                      provider.setSelectedAsistenValue(value.toString());
-                    },
+                    onChanged: widget.mode == BkmFormMode.edit
+                        ? null
+                        : (value) {
+                            provider.setSelectedAsistenValue(value.toString());
+                          },
                     hint: const Text("Pilih Asisten"),
                     isDense: false,
                     elevation: 1,
@@ -306,9 +319,12 @@ class _AddDataBodyState extends State<AddDataBody> {
                 ),
                 const SizedBox(height: 8),
                 GestureDetector(
-                  onTap: _showDatePicker,
+                  onTap:
+                      widget.mode != BkmFormMode.edit ? _showDatePicker : null,
                   child: AbsorbPointer(
                     child: TextField(
+                      readOnly: true, // biar user gak bisa ketik manual
+                      enabled: widget.mode != BkmFormMode.edit, // style disable
                       decoration: InputDecoration(
                         hintText: '${_selectedDate.toLocal()}'.split(' ')[0],
                         suffixIcon: const Icon(Icons.calendar_today),

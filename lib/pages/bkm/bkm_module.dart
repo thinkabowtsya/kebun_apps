@@ -6,12 +6,16 @@ import 'package:flutter_application_3/pages/bkm/addPrestasi.dart';
 import 'package:flutter_application_3/pages/bkm/editPrestasi.dart';
 import 'package:flutter_application_3/pages/bkm/lihatbkm.dart';
 import 'package:flutter_application_3/pages/bkm/material.dart';
+import 'package:flutter_application_3/pages/bkm/sinkronisasi.dart';
 import 'package:flutter_application_3/pages/bkm_page.dart';
+import 'package:flutter_application_3/pages/sinkron_page.dart';
 import 'package:flutter_application_3/providers/bkm/absensi_provider.dart';
 import 'package:flutter_application_3/providers/bkm/bkm_provider.dart';
 import 'package:flutter_application_3/providers/bkm/kehadiran_provider.dart';
 import 'package:flutter_application_3/providers/bkm/material_provider.dart';
 import 'package:flutter_application_3/providers/bkm/prestasi_provider.dart';
+import 'package:flutter_application_3/providers/cekRKH_provider.dart';
+import 'package:flutter_application_3/providers/sync_provider.dart';
 import 'package:flutter_application_3/providers/tambahdata_bkm_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -26,6 +30,8 @@ class BkmModule extends StatelessWidget {
       ChangeNotifierProvider(create: (_) => KehadiranProvider()),
       ChangeNotifierProvider(create: (_) => MaterialProvider()),
       ChangeNotifierProvider(create: (_) => AbsensiProvider()),
+      ChangeNotifierProvider(create: (_) => SyncProvider()),
+      ChangeNotifierProvider(create: (_) => CekRkhProvider()),
     ], child: const BkmNavigator());
   }
 }
@@ -88,6 +94,9 @@ class BkmNavigator extends StatelessWidget {
                 page = LihatBkm(
                   notransaksi: args['noTransaksi'],
                 );
+                break;
+              case '/sinkronisasi':
+                page = const SinkronisasiPage();
                 break;
               default:
                 page = const BukuKerjaMandorPage();

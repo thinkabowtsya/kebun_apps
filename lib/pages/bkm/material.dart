@@ -90,14 +90,13 @@ class _MaterialBodyState extends State<MaterialBody> {
                       setState(() {
                         selectedGudang = value;
                         selectedMaterial = null;
+
+                        String? kodekegiatanTemp = bkmProvider.kodekegiatanTemp;
+
+                        provider.fetchMaterial(
+                            val: value!, kodekegiatan: kodekegiatanTemp);
                       });
                     }
-                    String? kodekegiatanTemp = bkmProvider.kodekegiatanTemp;
-
-                    provider.fetchMaterial(
-                        val: value!, kodekegiatan: kodekegiatanTemp);
-                    print('material');
-                    print(provider.material);
                   },
                   hint: const Text("Pilih Gudang"),
                   isDense: false,

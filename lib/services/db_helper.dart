@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_application_3/models/bjr.dart';
 import 'package:flutter_application_3/models/blok.dart';
 import 'package:flutter_application_3/models/customer.dart';
@@ -40,6 +42,7 @@ import 'package:flutter_application_3/services/constant.dart';
 import 'package:flutter_application_3/services/helper.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:sqflite_live/sqflite_live.dart';
 
 class DBHelper {
   Database? _database;
@@ -65,8 +68,74 @@ class DBHelper {
     await _createLogMobileTable(db);
   }
 
+  Future<void> insertMenuMobileBatch(List<dynamic> items) async {
+    if (items.isEmpty) return;
+    final db = await database;
+    final batch = db!.batch();
+
+    for (final it in items) {
+      Map<String, dynamic> map;
+      if (it is Map<String, dynamic>) {
+        map = it;
+      } else if (it is Map) {
+        map = Map<String, dynamic>.from(it);
+      } else {
+        // fallback: simpan sebagai caption
+        map = {'id': null, 'caption': it.toString()};
+      }
+
+      // Pastikan semua kolom ada; ubah nama kolom sesuai struktur servermu
+      final row = <String, dynamic>{
+        'id': map['id']?.toString(), // kolom TEXT
+        'type': map['type']?.toString() ?? '',
+        'caption': map['caption']?.toString() ?? '',
+        'caption2': map['caption2']?.toString() ?? '',
+        'caption3': map['caption3']?.toString() ?? '',
+        'action': map['action']?.toString() ?? '',
+        'formjs': map['formjs']?.toString() ?? '',
+        'formjsloc': map['formjsloc']?.toString() ?? '',
+        'parent': map['parent']?.toString() ?? '',
+        'urut': map['urut']?.toString() ?? '',
+        'hide': map['hide']?.toString() ?? '',
+      };
+
+      // replace existing row with same id (ConflictAlgorithm.replace)
+      batch.insert('menumobile', row,
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+
+    await batch.commit(noResult: true);
+  }
+
+  /// Ambil semua menu dari DB, parsing payload JSON kembali
+  Future<List<Map<String, dynamic>>> getMenuMobileItems() async {
+    final db = await database;
+    final rows = await db!.query('menumobile', orderBy: 'urut ASC, id ASC');
+    return rows.map((r) {
+      return {
+        'id': r['id'],
+        'type': r['type'],
+        'caption': r['caption'],
+        'caption2': r['caption2'],
+        'caption3': r['caption3'],
+        'action': r['action'],
+        'formjs': r['formjs'],
+        'formjsloc': r['formjsloc'],
+        'parent': r['parent'],
+        'urut': r['urut'],
+        'hide': r['hide'],
+      };
+    }).toList();
+  }
+
+  /// Hapus semua menu (dipakai saat logout jika ingin membersihkan)
+  Future<void> clearMenuMobile() async {
+    final db = await database;
+    await db!.delete('menumobile');
+  }
+
   Future<void> _createUserTable(Database db) async {
-    await db.execute('''DROP TABLE IF EXISTS loginonfo''');
+    // await db.execute('''DROP TABLE IF EXISTS loginonfo''');
 
     await db.execute('''
     CREATE TABLE IF NOT EXISTS loginonfo (
@@ -89,7 +158,7 @@ class DBHelper {
   }
 
   Future<void> _createMenuMobileTable(Database db) async {
-    await db.execute('''DROP TABLE IF EXISTS menumobile''');
+    // await db.execute('''DROP TABLE IF EXISTS menumobile''');
 
     await db.execute('''
     CREATE TABLE IF NOT EXISTS menumobile (
@@ -109,7 +178,7 @@ class DBHelper {
   }
 
   Future<void> _createSetupNotifikasiTable(Database db) async {
-    await db.execute('''DROP TABLE IF EXISTS setup_notifikasi''');
+    // await db.execute('''DROP TABLE IF EXISTS setup_notifikasi''');
 
     await db.execute('''
     CREATE TABLE IF NOT EXISTS setup_notifikasi (last_penarikan TEXT, aktifasi_notif TEXT, run_time TEXT)
@@ -117,11 +186,21 @@ class DBHelper {
   }
 
   Future<void> _createLogMobileTable(Database db) async {
-    await db.execute('''DROP TABLE IF EXISTS log_mobile''');
+    // await db.execute('''DROP TABLE IF EXISTS log_mobile''');
 
     await db.execute('''
     CREATE TABLE IF NOT EXISTS log_mobile (username TEXT, data_log BLOB, syn text, update_time TEXT)
     ''');
+  }
+
+  Future<void> _createMenuMobile(Database db) async {
+    await db.execute('''
+          CREATE TABLE IF NOT EXISTS menu_mobile (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            payload TEXT
+          )
+        ''');
   }
 
   Future<void> createKaryawanTableIfNotExists() async {
@@ -133,8 +212,8 @@ class DBHelper {
       SELECT name FROM sqlite_master WHERE type='table' AND name='datakaryawan';
     ''');
 
-    if (result?.isEmpty ?? true) {
-      await db?.execute('''
+    // if (result?.isEmpty ?? true) {
+    await db?.execute('''
         CREATE TABLE IF NOT EXISTS datakaryawan (
           karyawanid TEXT,
           nik TEXT,
@@ -152,8 +231,8 @@ class DBHelper {
         );
       ''');
 
-      await db?.execute(''' DELETE FROM datakaryawan; ''');
-    }
+    await db?.execute(''' DELETE FROM datakaryawan; ''');
+    // }
   }
 
   Future<void> createOrganisasiTableIfNotExists() async {
@@ -843,10 +922,9 @@ class DBHelper {
       List<GudangTransaksi> gudangtransaksiList) async {
     await creategudangtransaksiTableIfNotExists();
     Database? db = await database;
-
+    // print('sebelum gudang transaksi');
     List<Map<String, Object?>> rowBatch =
         gudangtransaksiList.map((gudangtransaksi) {
-      print(gudangtransaksi);
       return {
         'afdeling': gudangtransaksi.afdeling,
         'kodegudang': gudangtransaksi.kodegudang,
@@ -950,22 +1028,47 @@ class DBHelper {
     });
   }
 
-  Future<void> createkemandoranTableIfNotExists() async {
-    Database? db = await database;
+  // Future<void> createkemandoranTableIfNotExists() async {
+  //   Database? db = await database;
 
-    // await db?.execute('''DROP TABLE IF EXISTS kemandoran''');
+  //   await db?.execute('''DROP TABLE IF EXISTS kemandoran''');
+
+  //   var result = await db?.rawQuery('''
+  //     SELECT name FROM sqlite_master WHERE type='table' AND name='kemandoran';
+  //   ''');
+
+  //   // print(result);
+
+  //   if (result?.isEmpty ?? true) {
+  //     // print('masuk kondisi?');
+  //     await db?.execute('''
+  //     CREATE TABLE IF NOT EXISTS kemandoran(mandorid TEXT,karyawanid TEXT);
+  //     ''');
+
+  //     // await db?.execute(''' DELETE FROM kemandoran; ''');
+  //   }
+  // }
+
+  Future<void> createkemandoranTableIfNotExists() async {
+    final db = await database;
+
+    await db?.execute('''DROP TABLE IF EXISTS kemandoran''');
 
     var result = await db?.rawQuery('''
       SELECT name FROM sqlite_master WHERE type='table' AND name='kemandoran';
     ''');
 
-    if (result?.isEmpty ?? true) {
-      await db?.execute('''
-      CREATE TABLE IF NOT EXISTS kemandoran(mandorid TEXT,karyawanid TEXT);
-      ''');
+    // if (result?.isEmpty ?? true) {
+    await db?.execute('''
+    CREATE TABLE IF NOT EXISTS kemandoran(
+      mandorid   TEXT NOT NULL,
+      karyawanid TEXT NOT NULL,
+      PRIMARY KEY (mandorid, karyawanid)  -- penting untuk REPLACE
+    );
+  ''');
 
-      await db?.execute(''' DELETE FROM kemandoran; ''');
-    }
+    await db?.execute(''' DELETE FROM kemandoran; ''');
+    // }
   }
 
   Future<void> insertkemandoranBatch(List<Kemandoran> kemandoranList) async {
@@ -974,7 +1077,7 @@ class DBHelper {
 
     List<Map<String, Object?>> rowBatch = kemandoranList.map((kemandoran) {
       // print('kemandiran lost');
-      // print(kemandoran);
+      // print(kemandoran.mandorid);
       return {
         'mandorid': kemandoran.mandorid,
         'karyawanid': kemandoran.karyawanid,
@@ -994,6 +1097,7 @@ class DBHelper {
 
     var result = await db?.rawQuery('SELECT * FROM kemandoran');
     print("Total rows in kemandoran: ${result?.length}");
+    print(result);
   }
 
   Future<void> createkemandoranblokTableIfNotExists() async {
@@ -1016,7 +1120,7 @@ class DBHelper {
 
   Future<void> insertkemandoranblokBatch(
       List<KemandoranBlok> kemandoranblokList) async {
-    await createkemandoranTableIfNotExists();
+    await createkemandoranblokTableIfNotExists();
     Database? db = await database;
 
     List<Map<String, Object?>> rowBatch =
@@ -1067,7 +1171,7 @@ class DBHelper {
 
   Future<void> insertkontrakkegiatanBatch(
       List<KontrakKegiatan> kontrakkegiatanList) async {
-    await createkemandoranTableIfNotExists();
+    await createkontrakkegiatanTableIfNotExists();
     Database? db = await database;
 
     List<Map<String, Object?>> rowBatch =
@@ -2125,7 +2229,12 @@ class DBHelper {
 
     var result = await db?.rawQuery(sql);
 
-    // print(result);
+    var resulttes = await db?.rawQuery('''
+      select * from kemandoran
+    ''');
+
+    print('ada table');
+    print(resulttes);
 
     if (result == null || result.isEmpty) {
       print("No data found in database.");

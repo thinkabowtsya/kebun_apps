@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_3/pages/bkm/addData.dart';
+import 'package:flutter_application_3/pages/widget/camera.dart';
+import 'package:flutter_application_3/pages/widget/essential.dart';
 import 'package:flutter_application_3/providers/bkm/bkm_provider.dart';
 import 'package:flutter_application_3/providers/bkm/prestasi_provider.dart';
-import 'package:flutter_application_3/providers/tambahdata_bkm_provider.dart';
+import 'package:flutter_application_3/widget/searchable_selector.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:image/image.dart' as img;
 import 'dart:io';
 
 class AddPrestasiPage extends StatelessWidget {
@@ -47,11 +46,18 @@ class _AddPrestasiBodyState extends State<AddPrestasiBody> {
   String? selectedBlok;
   String? selectedKegiatan;
 
+  File? _previewFile1;
+  File? _capturedImage1;
+
+  File? _previewFile2;
+  File? _capturedImage2;
+
+  String? _pathFoto1;
+  String? _pathFoto2;
+
   @override
   void initState() {
     super.initState();
-    _initializeCamera();
-    _getCurrentLocation();
 
     final provider = Provider.of<PrestasiProvider>(context, listen: false);
     Future.microtask(() {
@@ -64,154 +70,6 @@ class _AddPrestasiBodyState extends State<AddPrestasiBody> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       provider.fetchAfdeling();
     });
-  }
-
-  Future<void> _initializeCamera() async {
-    try {
-      final cameras = await availableCameras();
-      _cameraController = CameraController(
-        cameras[0],
-        ResolutionPreset.high,
-      );
-      await _cameraController!.initialize();
-      if (mounted) setState(() {});
-    } catch (e) {
-      debugPrint('Camera initialization error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to initialize camera')),
-        );
-      }
-    }
-  }
-
-  Future<void> _getCurrentLocation() async {
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location services are disabled')),
-          );
-        }
-        return;
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Location permissions are denied')),
-            );
-          }
-          return;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Location permissions are permanently denied')),
-          );
-        }
-        return;
-      }
-
-      _currentPosition = await Geolocator.getCurrentPosition();
-      if (mounted) setState(() {});
-    } catch (e) {
-      debugPrint('Error getting location: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to get current location')),
-        );
-      }
-    }
-  }
-
-  Future<void> _takePicture(int index) async {
-    try {
-      setState(() {
-        if (index == 0) {
-          _isTakingPicture1 = true;
-        } else {
-          _isTakingPicture2 = true;
-        }
-      });
-
-      if (_cameraController == null ||
-          !_cameraController!.value.isInitialized) {
-        return;
-      }
-
-      final XFile image = await _cameraController!.takePicture();
-      final File watermarked = await _addWatermark(image);
-
-      if (_currentPosition != null) {
-        await PrestasiProvider.saveLocationToPrefs(
-          _currentPosition!.latitude,
-          _currentPosition!.longitude,
-        );
-      }
-
-      setState(() {
-        if (index == 0) {
-          _watermarkedImage1 = watermarked;
-          _isTakingPicture1 = false;
-        } else {
-          _watermarkedImage2 = watermarked;
-          _isTakingPicture2 = false;
-        }
-      });
-    } catch (e) {
-      setState(() {
-        if (index == 0) {
-          _isTakingPicture1 = false;
-        } else {
-          _isTakingPicture2 = false;
-        }
-      });
-      debugPrint('Error taking picture: $e');
-    }
-  }
-
-  Future<File> _addWatermark(XFile imageFile) async {
-    try {
-      final originalImageBytes = await imageFile.readAsBytes();
-      final originalImage = img.decodeImage(originalImageBytes)!;
-
-      final DateTime now = DateTime.now();
-      final watermarkText = ' ${now.toLocal().toString().split('.')[0]} | '
-          'Lat: ${_currentPosition?.latitude.toStringAsFixed(4) ?? 'N/A'}, '
-          'Long: ${_currentPosition?.longitude.toStringAsFixed(4) ?? 'N/A'}';
-
-      const fontSize = 24.0;
-      const padding = 10.0;
-
-      img.drawString(
-        originalImage,
-        watermarkText,
-        font: img.arial24,
-        x: 10,
-        y: originalImage.height - 40,
-        color: img.ColorRgb8(255, 0, 0),
-      );
-
-      final directory = await getTemporaryDirectory();
-      final watermarkedPath =
-          '${directory.path}/watermarked_${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-      final watermarkedFile = File(watermarkedPath)
-        ..writeAsBytesSync(img.encodeJpg(originalImage));
-
-      return watermarkedFile;
-    } catch (e) {
-      debugPrint('Error adding watermark: $e');
-      rethrow;
-    }
   }
 
   @override
@@ -267,24 +125,38 @@ class _AddPrestasiBodyState extends State<AddPrestasiBody> {
               ),
               textAlign: TextAlign.start,
             ),
-            DropdownButtonHideUnderline(
-              child: DropdownButton(
-                isExpanded: true,
-                value: selectedBlok,
-                items: _buildBlokItems(provider.blok),
-                onChanged: (value) {
-                  // provider.setSelectedBlokValue(value!);
-                  // // print(value);
-                  // provider.changeKegiatanByBlok(val: value);
-                  setState(() {
-                    selectedBlok = value;
-                    selectedKegiatan = null;
-                  });
-                  provider.changeKegiatanByBlok(val: value!);
-                },
-                hint: const Text("Pilih Blok"),
-              ),
+            SearchableSelector(
+              data: provider.blok.map((item) {
+                return {
+                  'id': item['kodeblok'].toString(),
+                  'name': "${item['kodeblok']} ",
+                  'subtitle': "${item['tahuntanam']}",
+                };
+              }).toList(),
+              labelText: 'Pilih Blok',
+              onSelected: (selectedId) async {
+                setState(() {
+                  selectedBlok = selectedId;
+                  selectedKegiatan = null;
+                });
+                provider.changeKegiatanByBlok(val: selectedId!);
+              },
             ),
+            // DropdownButtonHideUnderline(
+            //   child: DropdownButton(
+            //     isExpanded: true,
+            //     value: selectedBlok,
+            //     items: _buildBlokItems(provider.blok),
+            //     onChanged: (value) {
+            //       setState(() {
+            //         selectedBlok = value;
+            //         selectedKegiatan = null;
+            //       });
+            //       provider.changeKegiatanByBlok(val: value!);
+            //     },
+            //     hint: const Text("Pilih Blok"),
+            //   ),
+            // ),
             const SizedBox(height: 8),
             const Text(
               "Kegiatan",
@@ -294,20 +166,36 @@ class _AddPrestasiBodyState extends State<AddPrestasiBody> {
               ),
               textAlign: TextAlign.start,
             ),
-            DropdownButtonHideUnderline(
-              child: DropdownButton(
-                isExpanded: true,
-                value: selectedKegiatan,
-                items: _buildKegiatanItems(provider.kegiatan),
-                onChanged: (value) {
-                  // provider.setSelectedKegiatanValue(value!);
-                  setState(() {
-                    selectedKegiatan = value;
-                  });
-                },
-                hint: const Text("Pilih Kegiatan"),
-              ),
+            SearchableSelector(
+              data: provider.kegiatan.map((item) {
+                return {
+                  'id': item['kodekegiatan'].toString(),
+                  'name': "${item['namakegiatan']}",
+                  'subtitle': "${item['kodekegiatan']} | ${item['kelompok']}",
+                };
+              }).toList(),
+              labelText: 'Pilih Kegiatan',
+              onSelected: (selectedId) async {
+                setState(() {
+                  selectedKegiatan = selectedId;
+                });
+                // provider.changeKegiatanByBlok(val: selectedId!);
+              },
             ),
+            // DropdownButtonHideUnderline(
+            //   child: DropdownButton(
+            //     isExpanded: true,
+            //     value: selectedKegiatan,
+            //     items: _buildKegiatanItems(provider.kegiatan),
+            //     onChanged: (value) {
+            //       // provider.setSelectedKegiatanValue(value!);
+            //       setState(() {
+            //         selectedKegiatan = value;
+            //       });
+            //     },
+            //     hint: const Text("Pilih Kegiatan"),
+            //   ),
+            // ),
             const SizedBox(height: 20),
             const Text(
               "Foto Mulai Kegiatan",
@@ -319,24 +207,49 @@ class _AddPrestasiBodyState extends State<AddPrestasiBody> {
             const SizedBox(height: 8),
             Column(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 8.0),
-                        child: _buildCameraPreviewWithButton(0),
-                      ),
+                    ActionButton(
+                      color: Colors.blue.shade900,
+                      label: 'AMBIL FOTO 1',
+                      onPressed: _addPicture1,
                     ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 8.0),
-                        child: _buildCameraPreviewWithButton(1),
-                      ),
-                    ),
+                    const SizedBox(height: 8),
+                    (_previewFile1 != null)
+                        ? SizedBox(
+                            height: 200,
+                            width: double.infinity,
+                            child: Image.file(
+                              _previewFile1!,
+                              fit: BoxFit.contain,
+                            ),
+                          )
+                        : const Text("Belum ada foto"),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ActionButton(
+                      color: Colors.blue.shade900,
+                      label: 'AMBIL FOTO 2',
+                      onPressed: _addPicture2,
+                    ),
+                    const SizedBox(height: 8),
+                    (_previewFile2 != null)
+                        ? SizedBox(
+                            height: 200,
+                            width: double.infinity,
+                            child: Image.file(
+                              _previewFile2!,
+                              fit: BoxFit.contain,
+                            ),
+                          )
+                        : const Text("Belum ada foto"),
+                  ],
+                ),
               ],
             ),
             TextButton(
@@ -344,21 +257,12 @@ class _AddPrestasiBodyState extends State<AddPrestasiBody> {
                 final bkmProvider =
                     Provider.of<BkmProvider>(context, listen: false);
 
-                // pakai selected* di sini
-                // if (selectedAfdeling != null &&
-                //     selectedBlok != null &&
-                //     selectedKegiatan != null) {
                 final isValid = await _validateAndSubmit(
                     provider: provider,
                     selectedBlok: selectedBlok,
                     selectedAfdeling: selectedAfdeling,
                     selectedKegiatan: selectedKegiatan,
                     noBkm: bkmProvider.notransaksi);
-
-                // // provider.blok = [];
-                // if (isValid) {
-                //   return true;
-                // }
               },
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white,
@@ -383,141 +287,57 @@ class _AddPrestasiBodyState extends State<AddPrestasiBody> {
     });
   }
 
-  Widget _buildCameraPreviewWithButton(int index) {
-    // Jika ini foto 2 dan foto 1 belum ada
-    if (index == 1 && _watermarkedImage1 == null) {
-      return Container(
-        height: 200,
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Center(
-          child: Text(
-            'Ambil Foto 1 terlebih dahulu',
-            style: TextStyle(color: Colors.grey),
-          ),
-        ),
-      );
-    }
+  // void _addPicture1() async {
+  //   final provider = context.read<PrestasiProvider>();
+  //   final File? result = await Navigator.push(
+  //     context,
+  //     MaterialPageRoute(builder: (_) => const CameraCapturePage()),
+  //   );
+  //   if (result != null) {
+  //     setState(() {
+  //       _previewFile1 = result;
+  //       _capturedImage1 = result;
+  //     });
+  //     // provider.setImage(result);
+  //   }
+  // }
 
-    final File? photo = index == 0 ? _watermarkedImage1 : _watermarkedImage2;
-    final bool isTakingPhoto =
-        index == 0 ? _isTakingPicture1 : _isTakingPicture2;
-
-    return Container(
-      height: 200,
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Camera Preview atau Foto yang sudah diambil
-          if (photo != null)
-            Stack(
-              children: [
-                Image.file(
-                  photo,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: double.infinity,
-                ),
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    color: Colors.black.withOpacity(0.7),
-                    child: Text(
-                      _currentPosition != null
-                          ? 'Foto ${index + 1}: ${DateTime.now().toLocal().toString().split('.')[0]}\n'
-                              'Lat: ${_currentPosition!.latitude.toStringAsFixed(4)}\n'
-                              'Long: ${_currentPosition!.longitude.toStringAsFixed(4)}'
-                          : 'Foto ${index + 1}: ${DateTime.now().toLocal().toString().split('.')[0]}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                      ),
-                      maxLines: 3,
-                    ),
-                  ),
-                ),
-              ],
-            )
-          else
-            (_cameraController != null &&
-                    _cameraController!.value.isInitialized)
-                ? FittedBox(
-                    fit: BoxFit.cover,
-                    child: SizedBox(
-                      width: 500,
-                      height: 600,
-                      child: CameraPreview(_cameraController!),
-                    ),
-                  )
-                : const Center(child: CircularProgressIndicator()),
-
-          // Tombol ambil foto di tengah (hanya muncul jika belum ada foto)
-          if (photo == null && (index == 0 || _watermarkedImage1 != null))
-            Positioned(
-              bottom: 10,
-              child: FloatingActionButton(
-                mini: true,
-                backgroundColor: const Color.fromARGB(255, 34, 85, 126),
-                onPressed: isTakingPhoto ? null : () => _takePicture(index),
-                child: isTakingPhoto
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : const Icon(Icons.camera_alt, color: Colors.white),
-              ),
-            ),
-
-          // Tombol clear (X) di pojok kanan atas (hanya muncul jika sudah ada foto)
-          if (photo != null)
-            Positioned(
-              top: 5,
-              right: 5,
-              child: GestureDetector(
-                onTap: () => _clearPhoto(index),
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.close,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ),
-        ],
+  Future<void> _addPicture1() async {
+    final File? result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const CameraCapturePage(filePrefix: 'foto_awal'),
       ),
     );
+
+    if (!mounted || result == null) return;
+
+    setState(() {
+      _previewFile1 = result; // untuk preview
+      _pathFoto1 = result.path; // inilah yang disimpan ke DB kolom foto kamu
+    });
+
+    // contoh kalau mau langsung store ke Provider/DB:
+    // context.read<PrestasiProvider>().setFotoAwalPath(_pathFoto1!);
   }
 
-  void _clearPhoto(int index) {
-    setState(() {
-      if (index == 0) {
-        _watermarkedImage1 = null;
+  void _addPicture2() async {
+    final provider = context.read<PrestasiProvider>();
+    final File? result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (_) => const CameraCapturePage(filePrefix: 'foto_akhir')),
+    );
+    if (result != null) {
+      setState(() {
+        _previewFile2 = result;
+        // _capturedImage2 = result;
+        _pathFoto2 = result.path;
+      });
+      // provider.setImage(result);
+    }
 
-        _watermarkedImage2 = null;
-      } else {
-        _watermarkedImage2 = null;
-      }
-    });
+    print(_pathFoto2);
   }
 
   List<DropdownMenuItem<String>> _buildAfdelingItems(
@@ -600,12 +420,6 @@ class _AddPrestasiBodyState extends State<AddPrestasiBody> {
     }).toList();
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
   Future<bool> _validateAndSubmit({
     required PrestasiProvider provider,
     String? selectedBlok = '',
@@ -615,8 +429,8 @@ class _AddPrestasiBodyState extends State<AddPrestasiBody> {
   }) async {
     final errors = <String>[];
 
-    if (_watermarkedImage1 == null) errors.add('Gambar 1 wajib diisi');
-    if (_watermarkedImage2 == null) errors.add('Gambar 2 wajib diisi');
+    if (_pathFoto1 == null) errors.add('Gambar 1 wajib diisi');
+    if (_pathFoto1 == null) errors.add('Gambar 2 wajib diisi');
     if (selectedBlok == null || selectedBlok.isEmpty)
       errors.add('Blok wajib diisi');
     if (selectedAfdeling == null || selectedAfdeling.isEmpty)
@@ -643,10 +457,11 @@ class _AddPrestasiBodyState extends State<AddPrestasiBody> {
       return false;
     }
 
-    // validasi lolos, simpan data
     provider.savePrestasi(
-      image1: _watermarkedImage1!,
-      image2: _watermarkedImage2!,
+      // image1: _capturedImage1!,
+      // image2: _capturedImage2!,
+      image1: _pathFoto1!,
+      image2: _pathFoto2!,
       noBKM: noBkm!,
       kegiatan: selectedKegiatan!,
       blok: selectedBlok!,

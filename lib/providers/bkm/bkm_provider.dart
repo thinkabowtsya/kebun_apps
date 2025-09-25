@@ -15,6 +15,8 @@ class BkmProvider with ChangeNotifier {
   bool _isLoadingMandor = false;
   String? _selectedMandorValue;
 
+  bool _isLoadingKegiatan = false;
+
   List<Map<String, dynamic>> _mandor1 = [];
   bool _isLoadingMandor1 = false;
   String? _selectedMandor1Value;
@@ -23,20 +25,25 @@ class BkmProvider with ChangeNotifier {
   bool _isLoadingAsisten = false;
   String? _selectedAsistenValue;
 
-  late DateTime _selectedDate;
+  late DateTime _selectedDate = DateTime.now();
   DateTime get selectedDate => _selectedDate;
 
   List<Map<String, dynamic>> _bkmListing = [];
   List<Map<String, dynamic>> _kehadiranUmumListing = [];
+  List<Map<String, dynamic>> _prestasiListing = [];
+  List<Map<String, dynamic>> _materialListing = [];
 
   String? _noTransaksi;
   String? _kodekegiatanTemp;
   String? _kodeorgTemp;
   double? _luasproduktifTemp;
   double? _luaspokokTemp;
+  String? _namakegiatan;
 
   List<Map<String, dynamic>> get mandor => _mandor;
   bool get isLoadingMandor => _isLoadingMandor;
+  bool get isLoadingKegiatan => _isLoadingKegiatan;
+
   String? get selectedMandorValue => _selectedMandorValue;
 
   List<Map<String, dynamic>> get mandor1 => _mandor1;
@@ -49,6 +56,8 @@ class BkmProvider with ChangeNotifier {
 
   List<Map<String, dynamic>> get bkmListing => _bkmListing;
   List<Map<String, dynamic>> get kehadiranUmumListing => _kehadiranUmumListing;
+  List<Map<String, dynamic>> get prestasiListing => _prestasiListing;
+  List<Map<String, dynamic>> get materialListing => _materialListing;
 
   String _bkmklasifikasi = '';
   String _bkmnomor = '';
@@ -58,6 +67,7 @@ class BkmProvider with ChangeNotifier {
   String get bkmnomor => _bkmnomor;
   String get bkmkrani => _bkmkrani;
 
+  String? get namakegiatan => _namakegiatan;
   String? get notransaksi => _noTransaksi;
   String? get kodekegiatanTemp => _kodekegiatanTemp;
   String? get kodeorgTemp => _kodeorgTemp;
@@ -159,14 +169,17 @@ class BkmProvider with ChangeNotifier {
       final result = await db.rawQuery(sql, [lokasitugas]);
 
       _mandor = result.isNotEmpty ? result : [];
+      // print(defaultMandorName != null && _mandor.isNotEmpty);
+      // if (defaultMandorName != null && _mandor.isNotEmpty) {
+      //   final defaultMandor = _mandor.firstWhere(
+      //     (item) => item['namakaryawan'] == defaultMandorName,
+      //   );
 
-      if (defaultMandorName != null && _mandor.isNotEmpty) {
-        final defaultMandor = _mandor.firstWhere(
-          (item) => item['namakaryawan'] == defaultMandorName,
-        );
+      //   // print('default mandor');
+      //   // print(defaultMandor);
 
-        setSelectedMandorValue(defaultMandor['karyawanid'].toString());
-      }
+      //   setSelectedMandorValue(defaultMandor['karyawanid'].toString());
+      // }
     } catch (e, stackTrace) {
       print("🔴 Error: $e");
       print("🔴 Stack Trace: $stackTrace");
@@ -284,87 +297,87 @@ class BkmProvider with ChangeNotifier {
     String? mandor = selectedMandorValue;
     String? mandor1 = selectedMandor1Value;
 
-    try {
-      await db.execute('BEGIN TRANSACTION');
+    print('asisten $asisten');
 
-      String query = '''
+    try {
+      // Gunakan transaction agar COMMIT/ROLLBACK otomatis
+      await db.transaction((txn) async {
+        String query = '''
         SELECT * FROM kebun_aktifitas
         WHERE nikmandor="$mandor"
         AND tanggal ="$tgl"
       ''';
 
-      final result = await db.rawQuery(query);
+        final result = await txn.rawQuery(query);
 
-      if (result.isNotEmpty) {
-        throw Exception('Mandor $mandor sudah ada di tanggal $tgl');
-      } else {
-        String query2 = ('''
+        if (result.isNotEmpty) {
+          // Jika ada, lempar sehingga transaction akan rollback otomatis
+          throw Exception('Mandor $mandor sudah ada di tanggal $tgl');
+        } else {
+          String query2 = ('''
           SELECT * FROM kebun_aktifitas
           WHERE notransaksi="$notransaksi"
           AND updateby ="$username"
          ''');
-        final ceknotransaksi = await db.rawQuery(query2);
-        if (ceknotransaksi.isEmpty) {
-          await db.rawInsert(
-            '''
+
+          final ceknotransaksi = await txn.rawQuery(query2);
+          if (ceknotransaksi.isEmpty) {
+            await txn.rawInsert(
+              '''
             INSERT INTO kebun_aktifitas(notransaksi,nobkm,kodeorg,kodeklasifikasi,tanggal,nikmandor,nikmandor1,nikasisten,kerani,updateby,synchronized,status)
             VALUES (?, ?, ?, ?,?,?,?,?,?,?,?,?)
             ''',
-            [
-              notrans,
-              _bkmnomor,
-              kebun,
-              _bkmklasifikasi,
-              tgl,
-              mandor,
-              mandor1,
-              asisten,
-              _bkmkrani,
-              username,
-              '',
-              '0'
-            ],
-          );
+              [
+                notrans,
+                _bkmnomor,
+                kebun,
+                _bkmklasifikasi,
+                tgl,
+                mandor,
+                mandor1,
+                asisten,
+                _bkmkrani,
+                username,
+                '',
+                '0'
+              ],
+            );
 
-          print('berhasil insert');
-        } else {
-          String queryDelete = ''' SELECT * FROM kebun_aktifitas
+            print('berhasil insert');
+          } else {
+            String queryDelete = ''' SELECT * FROM kebun_aktifitas
           WHERE notransaksi="$notransaksi"
           AND updateby ="$username"''';
 
-          await db.rawQuery(queryDelete);
+            // original hanya mengeksekusi SELECT then insert; kita ikuti
+            await txn.rawQuery(queryDelete);
 
-          await db.rawInsert(
-            '''
+            await txn.rawInsert(
+              '''
             INSERT INTO kebun_aktifitas(notransaksi,nobkm,kodeorg,kodeklasifikasi,tanggal,nikmandor,nikmandor1,nikasisten,kerani,updateby,synchronized,status)
             VALUES (?, ?, ?, ?,?,?,?,?,?,?,?,?)
             ''',
-            [
-              notrans,
-              '',
-              kebun,
-              '',
-              tgl,
-              mandor,
-              mandor1,
-              asisten,
-              '',
-              username,
-              '',
-              '0'
-            ],
-          );
+              [
+                notrans,
+                '',
+                kebun,
+                '',
+                tgl,
+                mandor,
+                mandor1,
+                asisten,
+                '',
+                username,
+                '',
+                '0'
+              ],
+            );
+          }
         }
-      }
-
-      await db.execute('COMMIT');
-
-      final testData = await db.rawQuery('''SELECT * FROM kebun_aktifitas''');
-
-      print('Header berhasil disimpan');
-      print(testData);
+        // jika callback selesai tanpa throw => COMMIT otomatis
+      });
     } catch (e) {
-      await db.execute('ROLLBACK');
+      // transaction sudah otomatis rollback bila exception terjadi
       debugPrint('Error: $e');
       rethrow;
     }
@@ -514,30 +527,97 @@ class BkmProvider with ChangeNotifier {
     final db = await _dbHelper.database;
     if (db == null) return;
 
+    _isLoadingKegiatan = true;
+    notifyListeners();
+
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     String? username = prefs.getString('username')?.trim();
 
-    String strSelect =
-        '''  SELECT a.*, ifnull((SELECT namakaryawan FROM datakaryawan WHERE karyawanid = a.nikasisten), a.nikasisten) AS asisten, ifnull(b.namakaryawan,a.nikmandor) as mandor, ifnull((SELECT namakaryawan FROM datakaryawan WHERE karyawanid = a.nikmandor1), a.nikmandor1) AS mandor1 FROM kebun_aktifitas a LEFT JOIN datakaryawan b on a.nikmandor=b.karyawanid where a.notransaksi = '$notransaksi' and a.updateby like '%$username%' order by tanggal desc limit 1  ''';
+    try {
+      String strSelect =
+          '''  SELECT a.*, ifnull((SELECT namakaryawan FROM datakaryawan WHERE karyawanid = a.nikasisten), a.nikasisten) AS asisten, ifnull(b.namakaryawan,a.nikmandor) as mandor, ifnull((SELECT namakaryawan FROM datakaryawan WHERE karyawanid = a.nikmandor1), a.nikmandor1) AS mandor1 FROM kebun_aktifitas a LEFT JOIN datakaryawan b on a.nikmandor=b.karyawanid where a.notransaksi = '$notransaksi' and a.updateby like '%$username%' order by tanggal desc limit 1  ''';
 
-    final result = await db.rawQuery(strSelect);
-    _bkmListing = result;
+      final result = await db.rawQuery(strSelect);
+      _bkmListing = result;
 
-    String strKehadiranUmum = '''
+      String strKehadiranUmum = '''
         SELECT 
           d.namakaryawan, 
           a.* 
         FROM kebun_kehadiran a 
-        LEFT JOIN datakaryawan d ON a.nik = d.nik 
+        LEFT JOIN datakaryawan d ON a.nik = d.karyawanid 
         WHERE a.notransaksi = '$notransaksi' 
           AND a.kodekegiatan = 'ABSENSI' 
         ORDER BY a.lastupdate DESC
       ''';
 
-    final resultKehadiran = await db.rawQuery(strKehadiranUmum);
-    _kehadiranUmumListing = resultKehadiran;
+      final resultKehadiran = await db.rawQuery(strKehadiranUmum);
+      _kehadiranUmumListing = resultKehadiran;
 
-    notifyListeners();
+      const prestasiSelect = '''
+      SELECT
+        a.*,
+        c.extrafooding,
+        b.namakegiatan,
+        IFNULL(c.nik,'')        AS nik,
+        IFNULL(c.jhk,0)         AS jhk,
+        IFNULL(c.insentif,0)    AS insentif,
+        c.hasilkerja,
+        IFNULL(d.namakaryawan,'') AS namakaryawan,
+        c.premilebihbasis
+      FROM kebun_prestasi a
+      LEFT JOIN setup_kegiatan b
+        ON a.kodekegiatan = b.kodekegiatan
+      LEFT JOIN kebun_kehadiran c
+        ON a.kodekegiatan = c.kodekegiatan
+      AND a.kodeorg      = c.kodeorg
+      AND a.notransaksi  = c.notransaksi
+      LEFT JOIN datakaryawan d
+        ON c.nik = d.karyawanid
+      LEFT JOIN setup_blok e
+        ON a.kodeorg = e.kodeblok
+      WHERE a.notransaksi = ?
+      ORDER BY b.namakegiatan, b.kodekegiatan, a.kodeorg
+      ''';
+
+      final prestasiResult = await db.rawQuery(prestasiSelect, [notransaksi]);
+
+      _prestasiListing = prestasiResult;
+
+      print(_prestasiListing);
+
+      _namakegiatan = _prestasiListing.first['namakegiatan'];
+
+      String materialStr = '''   ''';
+
+      String materialSelect = '''
+      SELECT 
+        b.kodebarang AS kodebarang,
+        b.namabarang AS namabarang,
+        b.satuan     AS satuan,
+        a.kodekegiatan,
+        a.kodeorg,
+        a.kwantitas  AS kwantitas,
+        a.kwantitasha AS kwantitasha
+      FROM kebun_pakaimaterial a
+      LEFT OUTER JOIN log_5masterbarang b 
+        ON a.kodebarang = b.kodebarang
+      WHERE a.notransaksi = "$notransaksi"
+      ORDER BY b.namabarang
+    ''';
+
+      final materialResult = await db.rawQuery(materialSelect);
+
+      _materialListing = materialResult;
+    } catch (e, st) {
+      print("🔴 Error loadPrestasi: $e");
+      print(st);
+    } finally {
+      _isLoadingKegiatan = false;
+      notifyListeners();
+    }
+
+    // notifyListeners();
   }
 
   Future<void> deleteBkm(

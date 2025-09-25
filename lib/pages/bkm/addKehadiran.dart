@@ -5,6 +5,7 @@ import 'package:flutter_application_3/providers/bkm/bkm_provider.dart';
 import 'package:flutter_application_3/providers/bkm/kehadiran_provider.dart';
 import 'package:flutter_application_3/providers/bkm/prestasi_provider.dart';
 import 'package:flutter_application_3/providers/tambahdata_bkm_provider.dart';
+import 'package:flutter_application_3/widget/searchable_selector.dart';
 // import 'package:flutter_application_3/services/FormMode.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -88,6 +89,7 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
       final noTransaksi = provider.notransaksi;
       String? kodekegiatanTemp = provider.kodekegiatanTemp;
       String? kodeorgTemp = provider.kodeorgTemp;
+      String? kodeorg = provider.kodeorgTemp.toString().substring(0, 3);
       double? luasareaproduktifTemp = provider.luasproduktifTemp;
       double? luaspokokTemp = provider.luaspokokTemp;
       int extrafooding = kehadiranProvider.extrafooding;
@@ -108,8 +110,24 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
         //   _hkController.text =
         //       jhk.toString(); // biarkan default jika bukan bulat
         // }
-        _premiController.text = widget.dataList!['premi'].toString();
-        _extrafoodingController.text = widget.dataList?['extrafooding'];
+        _premiController.text = widget.dataList?['premi']?.toString() ?? '0.0';
+        // _extrafoodingController.text =
+        //     (widget.dataList?['extrafooding'] ?? 0.0).toString();
+        var extraVal = widget.dataList?['extrafooding'];
+
+        if (extraVal == null ||
+            extraVal.toString().toLowerCase() == 'null' ||
+            extraVal.toString().isEmpty) {
+          _extrafoodingController.text = '0.0';
+        } else {
+          _extrafoodingController.text = extraVal.toString();
+        }
+
+        print('list dari widget');
+        print(widget.dataList);
+
+        kehadiranProvider.setHasilPremiLebihBasis(
+            int.tryParse(widget.dataList?['premilebihbasis']) ?? 0);
 
         kehadiranProvider.setSelectedKaryawanValue(widget.dataList?['nik']);
 
@@ -117,20 +135,18 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
 
         // print(widget.dataList);
       } else {
-        print('add');
         kehadiranProvider.resetForm();
+        kehadiranProvider.initialize(
+            notransaksi: noTransaksi,
+            kodeKegiatan: kodekegiatanTemp,
+            kodeOrg: kodeorgTemp,
+            tanggal: tglbkm,
+            luasareaproduktif: luasareaproduktifTemp,
+            luaspokok: luaspokokTemp,
+            extrafooding: extrafooding,
+            tahun: tahun,
+            statusblok: statusblok);
       }
-
-      kehadiranProvider.initialize(
-          notransaksi: noTransaksi,
-          kodeKegiatan: kodekegiatanTemp,
-          kodeOrg: kodeorgTemp,
-          tanggal: tglbkm,
-          luasareaproduktif: luasareaproduktifTemp,
-          luaspokok: luaspokokTemp,
-          extrafooding: extrafooding,
-          tahun: tahun,
-          statusblok: statusblok);
     });
   }
 
@@ -180,39 +196,36 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
                       });
                     },
                   ),
-                  // RadioListTile(
-                  //   value: 3,
-                  //   groupValue: _selectedPresenceOption,
-                  //   title: const Text("Scan Jari"),
-                  //   onChanged: (value) {
-                  //     setState(() {
-                  //       _selectedPresenceOption = value!;
-                  //     });
-                  //   },
-                  // ),
                 ],
               ),
               const SizedBox(height: 10),
               const Text("Karyawan",
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
-              DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  isExpanded: true,
-                  value: kehadiranProvider.selectedKaryawanValue,
-                  // value: selectedKaryawan,
-                  items: _buildKaryawanItems(kehadiranProvider.karyawan),
-                  onChanged: (value) {
-                    // if (value != null) {
-                    kehadiranProvider
-                        .setSelectedKaryawanValue(value.toString());
-                    // }
-                    setState(() {
-                      selectedKaryawan = value;
-                    });
-                  },
-                  hint: const Text("Pilih Karyawan"),
-                ),
+              SearchableSelector(
+                data: kehadiranProvider.karyawan.map((item) {
+                  return {
+                    'id': item['karyawanid'].toString(),
+                    'name': item['namakaryawan'],
+                    'subtitle': "${item['subbagian']} | ${item['nik']}",
+                  };
+                }).toList(),
+                labelText: 'Pilih Pemanen',
+                // initialId: widget.nik, //
+                onSelected: (selectedId) {
+                  kehadiranProvider
+                      .setSelectedKaryawanValue(selectedId.toString());
+
+                  setState(() {
+                    selectedKaryawan = selectedId;
+
+                    if (kehadiranProvider.showDetail == false) {
+                      kehadiranProvider.setHkEnable(true);
+                    } else {
+                      kehadiranProvider.setHkEnable(true);
+                    }
+                  });
+                },
               ),
               const SizedBox(height: 10),
               if (kehadiranProvider.showDetail) ...[
@@ -229,7 +242,7 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
                   style: const TextStyle(fontSize: 15),
                 ),
                 Text(
-                  "Hasil Premi Lebih Basis : ${kehadiranProvider.premilebihbasis <= 0 ? 0 : kehadiranProvider.premilebihbasis}",
+                  "Hasil Premi Lebih Basis : ${kehadiranProvider.hasilpremiLebihBasis <= 0 ? 0 : kehadiranProvider.hasilpremiLebihBasis}",
                   style: const TextStyle(fontSize: 15),
                 ),
               ],
@@ -253,11 +266,15 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
                         controller: _hasilKerjaController,
                         enabled: true,
                         onChanged: (val) {
-                          final isValid = double.tryParse(val) != null &&
-                              double.parse(val) > 0;
+                          print('on change');
+
+                          final parsedDouble = double.tryParse(
+                              val.replaceAll(',', '.')); // terima koma juga
+                          final isValid =
+                              parsedDouble != null && parsedDouble > 0;
+
                           setState(() {
                             _isHasilKerjaValid = isValid;
-                            // _modeValidate = 'bkmHK';
                           });
 
                           String satuan = kehadiranProvider.satuankerja;
@@ -268,40 +285,25 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
                                 _hasilKerjaController.text);
                           }
 
+                          // panggil dengan double, jangan int.parse
+                          context
+                              .read<KehadiranProvider>()
+                              .updateHasilKerja(parsedDouble ?? 0.0);
+
+                          // panggilan _checkPremiBkm tetap bisa kirim teks controller
                           _checkPremiBkm(
-                              provider: kehadiranProvider,
-                              kodekegiatan: provider.kodekegiatanTemp,
-                              hasilkerja: _hasilKerjaController.text,
-                              kodeblok: provider.kodeorgTemp,
-                              karyawan: selectedKaryawan,
-                              tglbkm: provider.selectedDate,
-                              modeValidate: 'bkmHasilKerja',
-                              hkController: _hkController,
-                              hasilKerjaController: _hasilKerjaController,
-                              extrafoodingController: _extrafoodingController);
-
-                          // _validate(
-                          //     provider: prestasiProvider,
-                          //     hasilkerja: _hasilKerjaController.text,
-                          //     modeValidate: 'bkmHasilKerja');
-
-                          // if (selectedKaryawan == null) {
-                          //   _hasilKerjaController.text = '0';
-                          //   showDialog(
-                          //     context: context,
-                          //     useRootNavigator: false,
-                          //     builder: (_) => AlertDialog(
-                          //       title: const Text('Validasi Gagal'),
-                          //       content: const Text('karyawan wajib diisi'),
-                          //       actions: [
-                          //         TextButton(
-                          //           onPressed: () => Navigator.pop(context),
-                          //           child: const Text('OK'),
-                          //         )
-                          //       ],
-                          //     ),
-                          //   );
-                          // }
+                            provider: kehadiranProvider,
+                            kodekegiatan: provider.kodekegiatanTemp,
+                            hasilkerja: _hasilKerjaController.text,
+                            kodeblok: provider.kodeorgTemp,
+                            karyawan: selectedKaryawan,
+                            tglbkm: provider.selectedDate,
+                            modeValidate: 'bkmHasilKerja',
+                            hkController: _hkController,
+                            hasilKerjaController: _hasilKerjaController,
+                            extrafoodingController: _extrafoodingController,
+                            premiController: _premiController,
+                          );
                         },
                       ),
                       _InputFieldCard(
@@ -318,17 +320,23 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
                               kodeblok: provider.kodeorgTemp,
                               karyawan: selectedKaryawan,
                               tglbkm: provider.selectedDate,
-                              modeValidate: 'bkmHK');
+                              modeValidate: 'bkmHK',
+                              hkController: _hkController,
+                              hasilKerjaController: _hasilKerjaController,
+                              extrafoodingController: _extrafoodingController,
+                              premiController: _premiController);
                         },
                       ),
-                      const _InputFieldCard(
+                      _InputFieldCard(
                         hint: '0',
                         label: 'Premi',
+                        controller: _premiController,
                         labelHeader: 'Premi',
                         enabled: false,
                       ),
-                      const _InputFieldCard(
+                      _InputFieldCard(
                         hint: '0',
+                        controller: _extrafoodingController,
                         label: 'Extra Fooding',
                         labelHeader: 'Extra Fooding',
                         enabled: false,
@@ -344,7 +352,6 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
                   String hk = _hkController.text;
                   String premi = _premiController.text;
                   String extrafooding = _extrafoodingController.text;
-                  // print('press');
 
                   final result = _submit(
                       provider: provider,
@@ -357,8 +364,8 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
                       selectedKaryawan:
                           kehadiranProvider.selectedKaryawanValue);
 
-                  Provider.of<KehadiranProvider>(context, listen: false)
-                      .setShouldRefresh(true);
+                  // Provider.of<KehadiranProvider>(context, listen: false)
+                  //     .setShouldRefresh(true);
 
                   if (await result) {
                     // ScaffoldMessenger.of(context).showSnackBar(
@@ -404,7 +411,6 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
       String? bkmpremi,
       String? bkmextrafooding,
       String? selectedKaryawan}) async {
-    print(selectedKaryawan);
     final noTransaksi = provider.notransaksi;
     String? kodekegiatanTemp = provider.kodekegiatanTemp;
     String? kodeorgTemp = provider.kodeorgTemp;
@@ -422,17 +428,7 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
 
     DateTime tglbkm = provider.selectedDate;
 
-    final errors = <String>[];
-
-    // ignore: unrelated_type_equality_checks
-    if (hasilkerja == '' || hasilkerja == null || hasilkerja == 0) {
-      errors.add('Hasil Kerja Tidak Boleh Kosong !');
-    }
-
-    if ((bkmpremi == '' || bkmpremi == null || bkmpremi == 0) &&
-        (bkmhk == '' || bkmhk == null || bkmhk == 0)) {
-      errors.add('Premi/HK Tidak Boleh Kosong !');
-    }
+    // final errors = <String>[];
 
     int bkmHk = bkmhk!.trim().isEmpty ? 0 : int.tryParse(bkmhk.trim()) ?? 0;
     // int bkmOT = bkm!.trim().isEmpty ? 0 : int.tryParse(bkmhk.trim()) ?? 0;
@@ -443,38 +439,24 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
 
     DateTime bkmTgl = tglbkm;
 
-    print(bkmhk);
-
     String? karyawanBkm = selectedKaryawan;
 
-    if (karyawanBkm == '') {
-      errors.add('Silahkan Pilih Karyawan !');
-    } else if (karyawanBkm == bkmAsisten ||
-        karyawanBkm == bkmMandor ||
-        karyawanBkm == bkmMandor1) {
-      errors.add('Karyawan sudah dipakai di header transaksi');
-    } else if (double.parse(bkmhk) > 1 || double.parse(bkmhk) < 0) {
-      errors.add('Jumlah HK salah !');
-    } else if (kehadiranprovider.satuanpremi == 'HA' &&
-        bkmHasilKerja > luasareaproduktifTemp!) {
-      errors.add(
-          'Hasil kerja HA $bkmHasilKerja melebih luas blok $luasareaproduktifTemp');
-    } else if (bkmPremi < 0) {
-      errors.add('Jumlah Premi Tidak Boleh lebih kecil dari 0');
-    } else {
-      kehadiranprovider.simpanKehadiran(
-          notrans: noTransaksi,
-          nikkaryawan: karyawanBkm,
-          kodekegiatanTemp: kodekegiatanTemp,
-          kodeorgTemp: kodeorgTemp,
-          luasareaproduktifTemp: luasareaproduktifTemp,
-          luaspokokTemp: luaspokokTemp,
-          bkmexstrafooding: bkmextrafooding,
-          bkmhk: double.parse(bkmhk),
-          bkmhasilkerja: hasilkerja,
-          bkmpremi: bkmpremi,
-          context: context);
-    }
+    final errors = await kehadiranprovider.simpanKehadiran(
+        notrans: noTransaksi,
+        nikkaryawan: karyawanBkm,
+        kodekegiatanTemp: kodekegiatanTemp,
+        kodeorgTemp: kodeorgTemp,
+        luasareaproduktifTemp: luasareaproduktifTemp,
+        luaspokokTemp: luaspokokTemp,
+        bkmexstrafooding: bkmextrafooding,
+        bkmhk: double.parse(bkmhk.toString()),
+        bkmhasilkerja: hasilkerja,
+        bkmpremi: bkmpremi ?? '0',
+        bkmAsisten: bkmAsisten,
+        bkmMandor1: bkmMandor1,
+        bkmMandor: bkmMandor,
+        bkmPremiPrestasi: bkmPremiPrestasi,
+        context: context);
 
     if (errors.isNotEmpty) {
       await showDialog(
@@ -511,11 +493,16 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
     TextEditingController? hkController,
     TextEditingController? hasilKerjaController,
     TextEditingController? extrafoodingController,
+    TextEditingController? premiController,
   }) async {
     int tahun = int.tryParse(tglbkm.toString()) ?? DateTime.now().year;
     int gajipokok = 0;
     int tahuntanam = 0;
     String statusblok = '';
+
+    // if () {
+    print('iya ini false');
+    // }
 
     // final errors = <String>[];
 
@@ -532,12 +519,14 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
         tahunbkm: tahun,
         hkController: hkController,
         hasilKerjaController: hasilKerjaController,
-        extrafoodingController: extrafoodingController);
+        extrafoodingController: extrafoodingController,
+        premiController: premiController);
 
     if (errors.isNotEmpty) {
       // Reset field sesuai mode validasi
       if (modeValidate == 'bkmHK' && hkController != null) {
         hkController.text = '0';
+        // provider.setHkEnable(false);
       } else if (modeValidate == 'bkmHasilKerja' &&
           hasilKerjaController != null) {
         hasilKerjaController.text = '0';
@@ -563,60 +552,15 @@ class _TambahKehadiranBodyState extends State<TambahKehadiranBody> {
 
     return true;
   }
-
-  Future<bool> _validate(
-      {required PrestasiProvider provider,
-      String? hasilkerja,
-      String? bkmHK,
-      String? modeValidate}) async {
-    final errors = <String>[];
-
-    final hasilKerjaVal = double.tryParse(hasilkerja ?? '');
-    final hkVal = double.tryParse(bkmHK ?? '');
-
-    if (modeValidate == 'bkmHK') {
-      if (hkVal == null || hkVal < 0) {
-        errors.add('HK tidak boleh kurang dari 0!!');
-        _hkController.text = '0';
-        _extrafoodingController.text = '0';
-       
-      }
-    } else if (modeValidate == 'bkmHasilKerja') {
-      if (hasilKerjaVal == null || hasilKerjaVal < 0) {
-        errors.add('Hasil Kerja tidak boleh kurang dari 0/Kosong!!');
-        _hasilKerjaController.text = '0';
-      }
-    }
-
-    if (errors.isNotEmpty) {
-      await showDialog(
-        context: context,
-        useRootNavigator:
-            false, // ini penting karena kamu pakai custom Navigator
-        builder: (_) => AlertDialog(
-          title: const Text('Validasi Gagal'),
-          content: Text(errors.join('\n')),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            )
-          ],
-        ),
-      );
-
-      return false;
-    }
-
-    return true;
-  }
 }
 
 List<DropdownMenuItem<String>> _buildKaryawanItems(
     List<Map<String, dynamic>> data) {
+  print('data');
+
   return data.map((item) {
     return DropdownMenuItem(
-      value: item['nik'].toString(),
+      value: item['karyawanid'].toString(),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

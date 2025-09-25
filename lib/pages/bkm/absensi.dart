@@ -6,6 +6,7 @@ import 'package:flutter_application_3/providers/bkm/absensi_provider.dart';
 import 'package:flutter_application_3/providers/bkm/bkm_provider.dart';
 import 'package:flutter_application_3/providers/bkm/kehadiran_provider.dart';
 import 'package:flutter_application_3/providers/bkm/prestasi_provider.dart';
+import 'package:flutter_application_3/widget/searchable_selector.dart';
 // import 'package:flutter_application_3/services/FormMode.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -37,9 +38,10 @@ class _FormAbsensiBodyState extends State<FormAbsensiBody> {
   String _username = '';
   String? selectedKaryawan;
   bool premiDisabled = true;
+  bool hkDisable = false;
 
   final TextEditingController _absensiController = TextEditingController();
-  final TextEditingController _hkController = TextEditingController();
+  TextEditingController _hkController = TextEditingController();
   final TextEditingController _premiController = TextEditingController();
   final TextEditingController _keteranganController = TextEditingController();
 
@@ -63,6 +65,10 @@ class _FormAbsensiBodyState extends State<FormAbsensiBody> {
       final bkmProvider = Provider.of<BkmProvider>(context, listen: false);
 
       final notrans = bkmProvider.notransaksi;
+      _hkController.text = '1';
+      _premiController.text = '0';
+      premiDisabled = false;
+      hkDisable = true;
 
       await provider.fetchAbsensiDetail(notrans: notrans, username: _username);
 
@@ -122,35 +128,27 @@ class _FormAbsensiBodyState extends State<FormAbsensiBody> {
                       });
                     },
                   ),
-                  // RadioListTile(
-                  //   value: 3,
-                  //   groupValue: _selectedPresenceOption,
-                  //   title: const Text("Scan Jari"),
-                  //   onChanged: (value) {
-                  //     setState(() {
-                  //       _selectedPresenceOption = value!;
-                  //     });
-                  //   },
-                  // ),
                 ],
               ),
               const SizedBox(height: 10),
               const Text("Karyawan",
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
-              DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  isExpanded: true,
-                  value: selectedKaryawan,
-                  // value: selectedKaryawan,
-                  items: _buildKaryawanItems(kehadiranProvider.karyawan),
-                  onChanged: (value) {
-                    setState(() {
-                      selectedKaryawan = value;
-                    });
-                  },
-                  hint: const Text("Pilih Karyawan"),
-                ),
+              SearchableSelector(
+                data: kehadiranProvider.karyawan.map((item) {
+                  return {
+                    'id': item['karyawanid'].toString(),
+                    'name': item['namakaryawan'],
+                    'subtitle': "${item['subbagian']} | ${item['nik']}",
+                  };
+                }).toList(),
+                labelText: 'Pilih Pemanen',
+                // initialId: widget.nik, //
+                onSelected: (selectedId) {
+                  setState(() {
+                    selectedKaryawan = selectedId;
+                  });
+                },
               ),
               const SizedBox(height: 10),
               const Text(
@@ -167,7 +165,15 @@ class _FormAbsensiBodyState extends State<FormAbsensiBody> {
                   value: provider.selectedAbsensiValue,
                   items: _buildAbsensiItems(provider.absensi),
                   onChanged: (value) {
+                    print(value);
                     setState(() {
+                      if (value == 'M') {
+                        hkDisable = false;
+                        premiDisabled = true;
+                        _hkController.text = '0';
+                      } else if (value == "H") {
+                        hkDisable = false;
+                      }
                       premiDisabled = value != 'H';
                     });
 
@@ -192,6 +198,7 @@ class _FormAbsensiBodyState extends State<FormAbsensiBody> {
                 controller: _hkController,
                 textAlign: TextAlign.start,
                 keyboardType: TextInputType.number,
+                enabled: hkDisable,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                   focusedBorder: OutlineInputBorder(
@@ -213,7 +220,7 @@ class _FormAbsensiBodyState extends State<FormAbsensiBody> {
               TextField(
                 controller: _premiController,
                 textAlign: TextAlign.start,
-                enabled: !premiDisabled,
+                enabled: premiDisabled,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
@@ -473,7 +480,7 @@ class _FormAbsensiBodyState extends State<FormAbsensiBody> {
       List<Map<String, dynamic>> data) {
     return data.map((item) {
       return DropdownMenuItem(
-        value: item['nik'].toString(),
+        value: item['karyawanid'].toString(),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

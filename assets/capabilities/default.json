@@ -1,0 +1,7 @@
+{
+  "name": "default",
+  "codePages": "CP437",
+  "supports": ["qrCode", "bold", "underline", "cut"],
+  "paperWidths": ["58"],
+  "emphasis": true
+}

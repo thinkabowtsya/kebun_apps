@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_3/pages/bkm/bkm_module.dart';
 import 'package:flutter_application_3/pages/bkm_page.dart';
+import 'package:flutter_application_3/pages/haprestasipanen/hapanen_module.dart';
+import 'package:flutter_application_3/pages/laporanrkh/laporanrkh_module.dart';
+import 'package:flutter_application_3/pages/laporanrkh/laporanrkh_page.dart';
+import 'package:flutter_application_3/pages/panen/panen_module.dart';
+import 'package:flutter_application_3/pages/spb/spb_module.dart';
 
 class KebunPage extends StatelessWidget {
   // List data menu
@@ -8,10 +13,10 @@ class KebunPage extends StatelessWidget {
     {"title": "Transaksi", "isHeader": true, "page": "transaksi"},
     {"title": "Buku Kerja Mandor", "isHeader": false, "page": "bkm"},
     {"title": "Buku Panen", "isHeader": false, "page": "buku_panen"},
-    {"title": "Verifikasi", "isHeader": false, "page": "verifikasi"},
+    // {"title": "Verifikasi", "isHeader": false, "page": "verifikasi"},
     {"title": "Surat Pengantar Buah", "isHeader": false, "page": "spb"},
-    {"title": "BBC", "isHeader": false, "page": "bbc"},
-    {"title": "Taksasi Panen", "isHeader": false, "page": "taksasi_panen"},
+    // {"title": "BBC", "isHeader": false, "page": "bbc"},
+    // {"title": "Taksasi Panen", "isHeader": false, "page": "taksasi_panen"},
     {"title": "HA Prestasi Panen", "isHeader": false, "page": "happ"},
     {"title": "Laporan", "isHeader": true, "page": "laporan"},
     {"title": "Laporan RKH", "isHeader": false, "page": "rkh"},
@@ -27,7 +32,34 @@ class KebunPage extends StatelessWidget {
           builder: (_) => const BkmModule(), // TANPA child
         ),
       );
-      // print('object');
+    } else if (page == "buku_panen") {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const PanenModule(), // TANPA child
+        ),
+      );
+    } else if (page == "happ") {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const HaPrestasiPanenModule(), // TANPA child
+        ),
+      );
+    } else if (page == "spb") {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const SpbModule(),
+        ),
+      );
+    } else if (page == "rkh") {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const LaporanRKHModule(),
+        ),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Klik $page")),

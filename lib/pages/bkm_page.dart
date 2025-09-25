@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_3/pages/bkm/bkm_module.dart';
 import 'package:flutter_application_3/providers/bkm/bkm_provider.dart';
-import 'package:flutter_application_3/providers/tambahdata_bkm_provider.dart';
+import 'package:flutter_application_3/providers/cekRKH_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'package:flutter_application_3/pages/bkm/addData.dart';
-import 'package:flutter_application_3/providers/bkm_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class BukuKerjaMandorPage extends StatelessWidget {
   const BukuKerjaMandorPage({super.key});
@@ -32,24 +31,28 @@ class BukuKerjaMandorBody extends StatefulWidget {
 class _BukuKerjaMandorBodyState extends State<BukuKerjaMandorBody>
     with RouteAware {
   DateTime selectedDate = DateTime.now();
-  String username =
-      "suliana"; // TODO: ganti dengan username aktif dari login/session
-
+  // String username = "suliana";
+  String username = '';
+  bool rkh = false;
   @override
   void initState() {
     super.initState();
-
+    _loadUsername();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final provider = Provider.of<BkmProvider>(context, listen: false);
+
+      // print('cek rkh');
+      // print(cekrkh.cekRKHA());
       String cleanDate = DateFormat('yyyy-MM-dd').format(selectedDate).trim();
       provider.tampilkanListBKM(username, cleanDate);
+      provider.createTableBKM();
     });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    print('selected');
+
     // print(selectedDate.toString());
 
     final provider = Provider.of<BkmProvider>(context, listen: false);
@@ -62,6 +65,13 @@ class _BukuKerjaMandorBodyState extends State<BukuKerjaMandorBody>
         provider.setShouldRefresh(false);
       });
     }
+  }
+
+  Future<void> _loadUsername() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      username = prefs.getString('username')?.trim() ?? '';
+    });
   }
 
   @override
@@ -79,18 +89,33 @@ class _BukuKerjaMandorBodyState extends State<BukuKerjaMandorBody>
               children: [
                 TextButton(
                   onPressed: () async {
-                    // final result = Navigator.of(context).pushNamed('/add');
+                    final cekrkh =
+                        Provider.of<CekRkhProvider>(context, listen: false);
+                    final errors = await cekrkh.cekRKHA();
 
-                    // // Kalau hasil dari AddDataPage sukses, refresh list
-                    // if (result != null && result is bool && result == true) {
-                    //   provider.tampilkanListBKM(username);
-                    // }
-                    Navigator.pushNamed(context, '/add').then((value) {
-                      if (value == true) {
-                        provider.tampilkanListBKM(
-                            username); // trigger refresh kalau kembali dari form
-                      }
-                    });
+                    if (errors.isNotEmpty) {
+                      // kalau ada error → tampilkan pesan
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text("Peringatan"),
+                          content: Text(errors.join("\n")),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text("OK"),
+                            ),
+                          ],
+                        ),
+                      );
+                    } else {
+                      Navigator.pushNamed(context, '/add').then((value) {
+                        if (value == true) {
+                          provider.tampilkanListBKM(
+                              username); // trigger refresh kalau kembali dari form
+                        }
+                      });
+                    }
                   },
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.white,
@@ -200,36 +225,42 @@ class _BukuKerjaMandorBodyState extends State<BukuKerjaMandorBody>
                                   return SafeArea(
                                     child: Wrap(
                                       children: [
-                                        ListTile(
-                                          leading: const Icon(Icons.sync,
-                                              color: Colors.green),
-                                          title: const Text('Sinkronisasi'),
-                                          onTap: () async {
-                                            print('tapp1');
-                                          },
-                                        ),
-                                        ListTile(
-                                          leading: const Icon(Icons.edit,
-                                              color: Colors.green),
-                                          title: const Text('Edit'),
-                                          onTap: () async {
-                                            print('tapps');
+                                        if (data['synchronized'] == '')
+                                          ListTile(
+                                            leading: const Icon(Icons.sync,
+                                                color: Colors.green),
+                                            title: const Text('Sinkronisasi'),
+                                            onTap: () async {
+                                              Navigator.of(context)
+                                                  .pushNamed('/sinkronisasi')
+                                                  .then((value) {
+                                                provider
+                                                    .tampilkanListBKM(username);
+                                              });
+                                            },
+                                          ),
+                                        if (data['synchronized'] == '')
+                                          ListTile(
+                                            leading: const Icon(Icons.edit,
+                                                color: Colors.green),
+                                            title: const Text('Edit'),
+                                            onTap: () async {
+                                              print('tapps');
 
-                                            Navigator.of(context).pushNamed(
-                                              '/edit',
-                                              arguments: {
-                                                'mode': BkmFormMode.edit,
-                                                'noTransaksi':
-                                                    data['notransaksi'],
-                                              },
-                                            );
-                                          },
-                                        ),
+                                              Navigator.of(context).pushNamed(
+                                                '/edit',
+                                                arguments: {
+                                                  'mode': BkmFormMode.edit,
+                                                  'noTransaksi':
+                                                      data['notransaksi'],
+                                                },
+                                              );
+                                            },
+                                          ),
                                         ListTile(
                                           leading: const Icon(Icons.info),
                                           title: const Text('View'),
                                           onTap: () {
-                                            print('detail tap');
                                             // Navigator.of(context)
                                             //     .pushNamed('/lihat-bkm');
 
@@ -242,54 +273,59 @@ class _BukuKerjaMandorBodyState extends State<BukuKerjaMandorBody>
                                             );
                                           },
                                         ),
-                                        ListTile(
-                                          leading: const Icon(Icons.delete,
-                                              color: Colors.red),
-                                          title: const Text('Hapus'),
-                                          onTap: () async {
-                                            Navigator.pop(
-                                                context); // Tutup bottom sheet dulu
+                                        if (data['synchronized'] == '')
+                                          ListTile(
+                                            leading: const Icon(Icons.delete,
+                                                color: Colors.red),
+                                            title: const Text('Hapus'),
+                                            onTap: () async {
+                                              Navigator.pop(
+                                                  context); // Tutup bottom sheet dulu
 
-                                            // Tunggu sebentar biar konteks stabil
-                                            await Future.delayed(const Duration(
-                                                milliseconds: 200));
+                                              // Tunggu sebentar biar konteks stabil
+                                              await Future.delayed(
+                                                  const Duration(
+                                                      milliseconds: 200));
 
-                                            final confirm =
-                                                await showDialog<bool>(
-                                              context: context,
-                                              builder: (context) => AlertDialog(
-                                                title: const Text(
-                                                    'Konfirmasi Hapus'),
-                                                content: const Text(
-                                                    'Yakin ingin menghapus data ini?'),
-                                                actions: [
-                                                  TextButton(
-                                                    onPressed: () =>
-                                                        Navigator.pop(
-                                                            context, false),
-                                                    child: const Text('Batal'),
-                                                  ),
-                                                  TextButton(
-                                                    onPressed: () =>
-                                                        Navigator.pop(
-                                                            context, true),
-                                                    child: const Text('Hapus'),
-                                                  ),
-                                                ],
-                                              ),
-                                            );
+                                              final confirm =
+                                                  await showDialog<bool>(
+                                                context: context,
+                                                builder: (context) =>
+                                                    AlertDialog(
+                                                  title: const Text(
+                                                      'Konfirmasi Hapus'),
+                                                  content: const Text(
+                                                      'Yakin ingin menghapus data ini?'),
+                                                  actions: [
+                                                    TextButton(
+                                                      onPressed: () =>
+                                                          Navigator.pop(
+                                                              context, false),
+                                                      child:
+                                                          const Text('Batal'),
+                                                    ),
+                                                    TextButton(
+                                                      onPressed: () =>
+                                                          Navigator.pop(
+                                                              context, true),
+                                                      child:
+                                                          const Text('Hapus'),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
 
-                                            if (confirm == true) {
-                                              // print(true);
-                                              await provider.deleteBkm(
-                                                  notransaksi:
-                                                      data['notransaksi'],
-                                                  context: context);
-  
-                                              provider.setShouldRefresh(true);
-                                            }
-                                          },
-                                        ),
+                                              if (confirm == true) {
+                                                // print(true);
+                                                await provider.deleteBkm(
+                                                    notransaksi:
+                                                        data['notransaksi'],
+                                                    context: context);
+
+                                                provider.setShouldRefresh(true);
+                                              }
+                                            },
+                                          ),
                                       ],
                                     ),
                                   );

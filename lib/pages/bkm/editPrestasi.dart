@@ -3,12 +3,17 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_application_3/pages/bkm/addKehadiran.dart';
+import 'package:flutter_application_3/pages/widget/camera.dart';
+import 'package:flutter_application_3/pages/widget/essential.dart';
 import 'package:flutter_application_3/providers/bkm/bkm_provider.dart';
 import 'package:flutter_application_3/providers/bkm/kehadiran_provider.dart';
 import 'package:flutter_application_3/providers/bkm/material_provider.dart';
 import 'package:flutter_application_3/providers/bkm/prestasi_provider.dart';
 import 'package:flutter_application_3/providers/tambahdata_bkm_provider.dart';
 import 'package:flutter_application_3/services/FormMode.dart';
+import 'package:flutter_application_3/services/photo_helper.dart';
+import 'package:flutter_application_3/utils/image_helper.dart';
+import 'package:flutter_application_3/widget/datatable.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
 import 'package:geolocator/geolocator.dart';
@@ -52,6 +57,18 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
   bool _isTakingPicture = false;
   String? _base64Image1;
   String? _base64Image2;
+
+  File? _previewFile1;
+  File? _capturedImage1;
+
+  File? _previewFile2;
+  File? _capturedImage2;
+
+  String? _pathFoto1;
+  String? _pathFoto2;
+
+  bool _changed1 = false;
+  bool _changed2 = false;
 
   @override
   void initState() {
@@ -118,14 +135,15 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
 
     if (provider.shouldRefresh) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        provider.fetchKehadiranByTransaksi(
+        context.read<KehadiranProvider>().fetchKehadiranByTransaksi(
             notransaksi: noTransaksi,
             kodekegiatan: kodekegiatanTemp,
             kodeorg: kodeorgTemp,
             kelompok: luasareaproduktifTemp.toString(),
             luasareaproduktif: luaspokokTemp.toString());
+
+        provider.setShouldRefresh(false);
       });
-      provider.setShouldRefresh(false);
     }
     // print('refresh material');
 
@@ -207,100 +225,106 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
     }
   }
 
-  void _loadDataFromDB(String? kodekegiatan, String? kodeorg) async {
-    final provider = Provider.of<PrestasiProvider>(context, listen: false);
+  // void _loadDataFromDB(String? kodekegiatan, String? kodeorg) async {
+  //   final provider = Provider.of<PrestasiProvider>(context, listen: false);
 
-    final result = await provider.fetchPhotoAkhir(
-        kodekegiatan.toString(), kodeorg.toString());
+  //   final result = await provider.fetchPhotoAkhir(
+  //       kodekegiatan.toString(), kodeorg.toString());
 
-    if (result.isNotEmpty) {
+  //   if (result.isNotEmpty) {
+  //     setState(() {
+  //       _base64Image1 = result.first['jumlahhasilkerja'];
+  //       _base64Image2 = result.first['fotoend2'];
+  //     });
+  //   }
+
+  //   final bytes1 = await resolveImage(_capturedImage1, _base64Image1);
+  //   final bytes2 = await resolveImage(_capturedImage2, _base64Image2);
+  //   if (bytes1 != null || bytes2 != null) {
+  //     final file1 = await bytesToTempFile(bytes1!);
+  //     final file2 = await bytesToTempFile(bytes2!);
+  //     if (!mounted) return;
+
+  //     setState(() {
+  //       _previewFile1 = file1;
+  //       _capturedImage1 = file1;
+
+  //       _previewFile2 = file2;
+  //       _capturedImage2 = file2;
+  //     });
+  //     // detailProvider.setImage(file);
+  //   }
+  // }
+  Future<void> _loadDataFromDB(String? kodekegiatan, String? kodeorg) async {
+    final prestasi = await context
+        .read<PrestasiProvider>()
+        .fetchPhotoAkhir(kodekegiatan.toString(), kodeorg.toString());
+
+    if (prestasi.isEmpty) return;
+
+    // Kolom di DB: tetap pakai nama lama (mis. jumlahhasilkerja, fotoend2)
+    final v1 = (prestasi.first['jumlahhasilkerja'] ?? '').toString();
+    final v2 = (prestasi.first['fotoend2'] ?? '').toString();
+
+    // Foto 1
+    if (_looksLikeFilePath(v1)) {
+      final f = File(v1);
+      if (await f.exists()) {
+        setState(() {
+          _pathFoto1 = v1;
+          _previewFile1 = f;
+        });
+      }
+    } else if (_looksLikeBase64(v1)) {
+      // fallback kompatibilitas data lama
+      final f = await _base64ToTempFile(v1, prefix: 'db_foto1_');
       setState(() {
-        _base64Image1 = result.first['jumlahhasilkerja'];
-        _base64Image2 = result.first['fotoend2'];
+        _pathFoto1 = f.path; // opsional simpan lagi path-nya
+        _previewFile1 = f;
+      });
+    }
+
+    // Foto 2
+    if (_looksLikeFilePath(v2)) {
+      final f = File(v2);
+      if (await f.exists()) {
+        setState(() {
+          _pathFoto2 = v2;
+          _previewFile2 = f;
+        });
+      }
+    } else if (_looksLikeBase64(v2)) {
+      final f = await _base64ToTempFile(v2, prefix: 'db_foto2_');
+      setState(() {
+        _pathFoto2 = f.path;
+        _previewFile2 = f;
       });
     }
   }
 
-  Future<void> _takePicture(int index) async {
-    try {
-      setState(() {
-        if (index == 0) {
-          _isTakingPicture1 = true;
-        } else {
-          _isTakingPicture2 = true;
-        }
-      });
-
-      if (_cameraController == null ||
-          !_cameraController!.value.isInitialized) {
-        return;
-      }
-
-      final XFile image = await _cameraController!.takePicture();
-      final File watermarked = await _addWatermark(image);
-
-      if (_currentPosition != null) {
-        await DataProvider.saveLocationToPrefs(
-          _currentPosition!.latitude,
-          _currentPosition!.longitude,
-        );
-      }
-
-      setState(() {
-        if (index == 0) {
-          _watermarkedImage1 = watermarked;
-          _isTakingPicture1 = false;
-        } else {
-          _watermarkedImage2 = watermarked;
-          _isTakingPicture2 = false;
-        }
-      });
-    } catch (e) {
-      setState(() {
-        if (index == 0) {
-          _isTakingPicture1 = false;
-        } else {
-          _isTakingPicture2 = false;
-        }
-      });
-      debugPrint('Error taking picture: $e');
-    }
+  bool _looksLikeFilePath(String s) {
+    // Android internal app dir -> /data/user/0/...
+    // Juga cover "file://", atau Windows path saat dev
+    return s.startsWith('/data/') ||
+        s.startsWith('/storage/') ||
+        s.startsWith('file://') ||
+        s.contains(':\\');
   }
 
-  Future<File> _addWatermark(XFile imageFile) async {
-    try {
-      final originalImageBytes = await imageFile.readAsBytes();
-      final originalImage = img.decodeImage(originalImageBytes)!;
+  bool _looksLikeBase64(String s) {
+    if (s.isEmpty) return false;
+    final rx = RegExp(r'^[A-Za-z0-9+/]+={0,2}$');
+    return s.length % 4 == 0 && rx.hasMatch(s);
+  }
 
-      final DateTime now = DateTime.now();
-      final watermarkText = ' ${now.toLocal().toString().split('.')[0]} | '
-          'Lat: ${_currentPosition?.latitude.toStringAsFixed(4) ?? 'N/A'}, '
-          'Long: ${_currentPosition?.longitude.toStringAsFixed(4) ?? 'N/A'}';
-
-      const fontSize = 24.0;
-      const padding = 10.0;
-
-      img.drawString(
-        originalImage,
-        watermarkText,
-        font: img.arial24,
-        x: 10,
-        y: originalImage.height - 40,
-        color: img.ColorRgb8(255, 0, 0),
-      );
-
-      final directory = await getTemporaryDirectory();
-      final watermarkedPath =
-          '${directory.path}/watermarked_${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-      final watermarkedFile = File(watermarkedPath)
-        ..writeAsBytesSync(img.encodeJpg(originalImage));
-
-      return watermarkedFile;
-    } catch (e) {
-      debugPrint('Error adding watermark: $e');
-      rethrow;
-    }
+  Future<File> _base64ToTempFile(String b64,
+      {String prefix = 'from_db_'}) async {
+    final bytes = base64Decode(b64);
+    final dir = await getTemporaryDirectory();
+    final file =
+        File('${dir.path}/$prefix${DateTime.now().millisecondsSinceEpoch}.jpg');
+    await file.writeAsBytes(bytes, flush: true);
+    return file;
   }
 
   @override
@@ -313,7 +337,6 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
   @override
   Widget build(BuildContext context) {
     final dataKehadiran = context.watch<KehadiranProvider>().kehadiranList;
-
     final dataMaterial = context.watch<MaterialProvider>().materialList;
 
     return Consumer4<BkmProvider, PrestasiProvider, KehadiranProvider,
@@ -346,7 +369,19 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
                   children: [
                     TextButton(
                       onPressed: () async {
-                        await Navigator.of(context).pushNamed('/add-kehadiran');
+                        await Navigator.of(context)
+                            .pushNamed('/add-kehadiran')
+                            .then((value) {
+                          setState(() {
+                            kehadiranProvider.fetchKehadiranByTransaksi(
+                                notransaksi: noTransaksi,
+                                kodekegiatan: kodekegiatanTemp,
+                                kodeorg: kodeorgTemp,
+                                kelompok: luasareaproduktifTemp.toString(),
+                                luasareaproduktif: luaspokokTemp.toString());
+                          });
+                        });
+                        ;
                       },
                       style: TextButton.styleFrom(
                         foregroundColor: Colors.white,
@@ -495,20 +530,23 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
                                                         kodekegiatan: item[
                                                             'kodekegiatan'],
                                                         nik: item['nik']);
-
-                                                await kehadiranProvider
-                                                    .fetchKehadiranByTransaksi(
-                                                        notransaksi:
-                                                            item['notransaksi'],
-                                                        kodekegiatan: item[
-                                                            'kodekegiatan'],
-                                                        kodeorg:
-                                                            item['kodeorg'],
-                                                        kelompok:
-                                                            item['kelompok'],
-                                                        luasareaproduktif: item[
-                                                                'luasareaproduktif']
-                                                            .toString());
+                                                // if (!mounted) return;
+                                                setState(() {
+                                                  print('send back');
+                                                  kehadiranProvider
+                                                      .fetchKehadiranByTransaksi(
+                                                          notransaksi:
+                                                              noTransaksi,
+                                                          kodekegiatan:
+                                                              kodekegiatanTemp,
+                                                          kodeorg: kodeorgTemp,
+                                                          kelompok:
+                                                              luasareaproduktifTemp
+                                                                  .toString(),
+                                                          luasareaproduktif:
+                                                              luaspokokTemp
+                                                                  .toString());
+                                                });
 
                                                 ScaffoldMessenger.of(context)
                                                     .showSnackBar(
@@ -631,24 +669,49 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
             const SizedBox(height: 8),
             Column(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 8.0),
-                        child: _buildCameraPreviewWithButton(0),
-                      ),
+                    ActionButton(
+                      color: Colors.blue.shade900,
+                      label: 'AMBIL FOTO 1',
+                      onPressed: _addPicture1,
                     ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 8.0),
-                        child: _buildCameraPreviewWithButton(1),
-                      ),
-                    ),
+                    const SizedBox(height: 8),
+                    (_previewFile1 != null)
+                        ? SizedBox(
+                            height: 200,
+                            width: double.infinity,
+                            child: Image.file(
+                              _previewFile1!,
+                              fit: BoxFit.contain,
+                            ),
+                          )
+                        : const Text("Belum ada foto"),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ActionButton(
+                      color: Colors.blue.shade900,
+                      label: 'AMBIL FOTO 2',
+                      onPressed: _addPicture2,
+                    ),
+                    const SizedBox(height: 8),
+                    (_previewFile2 != null)
+                        ? SizedBox(
+                            height: 200,
+                            width: double.infinity,
+                            child: Image.file(
+                              _previewFile2!,
+                              fit: BoxFit.contain,
+                            ),
+                          )
+                        : const Text("Belum ada foto"),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 20),
@@ -834,154 +897,33 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
     });
   }
 
-  bool isValidBase64(String? value) {
-    if (value == null || value.isEmpty) return false;
-    final regex = RegExp(r'^[A-Za-z0-9+/]+={0,2}$');
-    return value.length % 4 == 0 && regex.hasMatch(value);
-  }
-
-  Widget _buildCameraPreviewWithButton(int index) {
-    final File? photo = index == 0 ? _watermarkedImage1 : _watermarkedImage2;
-    final bool isTakingPhoto =
-        index == 0 ? _isTakingPicture1 : _isTakingPicture2;
-    final String? base64Photos = index == 0 ? _base64Image1 : _base64Image2;
-
-    // Jika ini foto ke-2 tapi foto ke-1 belum ada
-    if (index == 1 && _watermarkedImage1 == null && _base64Image1 == null) {
-      return Container(
-        height: 200,
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Center(
-          child: Text(
-            'Ambil Foto 1 terlebih dahulu',
-            style: TextStyle(color: Colors.grey),
-          ),
-        ),
-      );
-    }
-
-    ImageProvider? imageProvider;
-    if (photo != null) {
-      imageProvider = FileImage(photo);
-    } else if (isValidBase64(base64Photos)) {
-      try {
-        imageProvider = MemoryImage(base64Decode(base64Photos!));
-      } catch (e) {
-        debugPrint("Gagal decode base64: $e");
-      }
-    }
-
-    return Container(
-      height: 200,
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          if (imageProvider != null)
-            Stack(
-              children: [
-                Image(
-                  image: imageProvider,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: double.infinity,
-                ),
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    color: Colors.black.withOpacity(0.7),
-                    child: Text(
-                      _currentPosition != null
-                          ? 'Foto ${index + 1}: ${DateTime.now().toLocal().toString().split('.')[0]}\n'
-                              'Lat: ${_currentPosition!.latitude.toStringAsFixed(4)}\n'
-                              'Long: ${_currentPosition!.longitude.toStringAsFixed(4)}'
-                          : 'Foto ${index + 1}: ${DateTime.now().toLocal().toString().split('.')[0]}',
-                      style: const TextStyle(color: Colors.white, fontSize: 9),
-                      maxLines: 3,
-                    ),
-                  ),
-                ),
-              ],
-            )
-          else if (_cameraController != null &&
-              _cameraController!.value.isInitialized)
-            FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: 500,
-                height: 600,
-                child: CameraPreview(_cameraController!),
-              ),
-            )
-          else
-            const Center(child: CircularProgressIndicator()),
-
-          // ✅ Tombol kamera hanya muncul jika belum ada file atau base64 valid
-          if (photo == null &&
-              !isValidBase64(base64Photos) &&
-              (index == 0 || _watermarkedImage1 != null))
-            Positioned(
-              bottom: 10,
-              child: FloatingActionButton(
-                mini: true,
-                backgroundColor: const Color.fromARGB(255, 34, 85, 126),
-                onPressed: isTakingPhoto ? null : () => _takePicture(index),
-                child: isTakingPhoto
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : const Icon(Icons.camera_alt, color: Colors.white),
-              ),
-            ),
-
-          // ✅ Tombol hapus muncul jika ada file atau base64 valid
-          if (photo != null || isValidBase64(base64Photos))
-            Positioned(
-              top: 5,
-              right: 5,
-              child: GestureDetector(
-                onTap: () => _clearPhoto(index),
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.close, color: Colors.white, size: 20),
-                ),
-              ),
-            ),
-        ],
+  void _addPicture1() async {
+    final File? result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const CameraCapturePage(filePrefix: 'foto_akhir_satu'),
       ),
     );
+    if (!mounted || result == null) return;
+    setState(() {
+      _previewFile1 = result;
+      _pathFoto1 = result.path;
+      _changed1 = true;
+    });
   }
 
-  void _clearPhoto(int index) {
+  void _addPicture2() async {
+    final File? result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const CameraCapturePage(filePrefix: 'foto_akhir_dua'),
+      ),
+    );
+    if (!mounted || result == null) return;
     setState(() {
-      if (index == 0) {
-        _watermarkedImage1 = null;
-        _base64Image1 = null;
-        _watermarkedImage2 = null; // reset foto 2 jika foto 1 dihapus
-        _base64Image2 = null;
-      } else {
-        _watermarkedImage2 = null;
-        _base64Image2 = null;
-      }
+      _previewFile2 = result;
+      _pathFoto2 = result.path;
+      _changed2 = true; // <— penting
     });
   }
 
@@ -993,36 +935,32 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
   }) async {
     final errors = <String>[];
 
-    // Ambil gambar dari File atau base64
-    final bytes1 = await resolveImage(_watermarkedImage1, _base64Image1);
-    final bytes2 = await resolveImage(_watermarkedImage2, _base64Image2);
-
-    // Validasi
-    if (bytes1 == null) errors.add('Gambar 1 wajib diisi');
-    if (bytes2 == null) errors.add('Gambar 2 wajib diisi');
+    if (_pathFoto1 == null || !(await File(_pathFoto1!).exists())) {
+      errors.add('Foto 1 tidak ditemukan.');
+    }
+    if (_pathFoto2 == null || !(await File(_pathFoto2!).exists())) {
+      errors.add('Foto 2 tidak ditemukan.');
+    }
 
     if (errors.isNotEmpty) {
       await showDialog(
         context: context,
-        useRootNavigator: false, // penting kalau pakai nested Navigator
         builder: (_) => AlertDialog(
           title: const Text('Validasi Gagal'),
           content: Text(errors.join('\n')),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            )
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'))
           ],
         ),
       );
       return false;
     }
 
-    // Jika lolos validasi, submit ke provider
     await provider.selesaiPhoto(
-      image1: bytes1!,
-      image2: bytes2!,
+      image1: _pathFoto1!, // path, bukan File/base64
+      image2: _pathFoto2!,
       kodekegiatan: kodekegiatan ?? '',
       kodeorg: kodeorg ?? '',
       notrans: notrans ?? '',
@@ -1030,91 +968,5 @@ class _EditPrestasiBodyState extends State<EditPrestasiBody> with RouteAware {
     );
 
     return true;
-  }
-
-  Future<Uint8List?> resolveImage(File? file, String? base64) async {
-    if (file != null) return await file.readAsBytes();
-    if (isValidBase64(base64)) return base64Decode(base64!);
-    return null;
-  }
-
-  List<DropdownMenuItem<String>> _buildAfdelingItems(
-      List<Map<String, dynamic>> data) {
-    return data.map((item) {
-      return DropdownMenuItem(
-        value: item['kodeorganisasi'].toString(),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "${item['namaorganisasi']}",
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      );
-    }).toList();
-  }
-
-  List<DropdownMenuItem<String>> _buildBlokItems(
-      List<Map<String, dynamic>> data) {
-    return data.map((item) {
-      return DropdownMenuItem(
-        value: item['kodeblok'].toString(),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "${item['kodeblok']}",
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            Text(
-              "${item['tahuntanam']}",
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-              ),
-            ),
-          ],
-        ),
-      );
-    }).toList();
-  }
-
-  List<DropdownMenuItem<String>> _buildKegiatanItems(
-      List<Map<String, dynamic>> data) {
-    return data.map((item) {
-      return DropdownMenuItem(
-        value: item['kodekegiatan'].toString(),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "${item['namakegiatan']}",
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            Text(
-              "${item['kodekegiatan']} | ${item['kelompok']}",
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-              ),
-            ),
-          ],
-        ),
-      );
-    }).toList();
   }
 }

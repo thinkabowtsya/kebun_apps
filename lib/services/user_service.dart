@@ -1,12 +1,10 @@
-// import 'package:flutter_application_3/models/api_response.dart';
-// import 'package:flutter_application_3/models/user.dart';
+// lib/services/user_service.dart
+import 'dart:convert';
 import 'package:flutter_application_3/models/user.dart';
 import 'package:flutter_application_3/services/constant.dart';
 import 'package:flutter_application_3/services/db_helper.dart';
 import 'package:flutter_application_3/services/helper.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
-
 import 'package:shared_preferences/shared_preferences.dart';
 
 class UserRepository {
@@ -15,63 +13,57 @@ class UserRepository {
   final DBHelper dbHelper = DBHelper();
   List<Map<String, dynamic>> _userList = [];
 
-  // Fetch users from SQLite or API
-  // Future<List<User>> getUsers() async {
-  //   // First check SQLite
-  //   List<User> localUsers = await dbHelper.fetchUsers();
-  //   if (localUsers.isNotEmpty) {
-  //     return localUsers;
-  //   }
+  Map<String, dynamic>? _lastLoginData;
 
-  //   const url = 'https://jsonplaceholder.typicode.com/users';
-  //   final response = await http.get(Uri.parse(url));
-
-  //   if (response.statusCode == 200) {
-  //     final List<dynamic> data = json.decode(response.body);
-  //     List<User> users = data.map((item) => User.fromJson(item)).toList();
-
-  //     // Store users to SQLite
-  //     for (var user in users) {
-  //       dbHelper.insertUser(user);
-  //     }
-
-  //     return users;
-  //   } else {
-  //     throw Exception('Failed to load users');
-  //   }
-  // }
-
+  /// Login: ambil data user (dan menu) dari server, simpan user ke SQLite & prefs,
+  /// serta simpan menu ke DB lokal (jika tersedia).
   Future<bool> login(String username, String password) async {
-    print(apiUrl);
     final url = Uri.parse(
-        '$apiUrl/owlMobile.php?method=getprofile2&username=$username&password=$password');
+      '$apiUrl/owlMobile.php?method=getprofile2&username=$username&password=$password',
+    );
 
     try {
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        _lastLoginData = data; // simpan response supaya bisa diakses Provider
 
-        if (data['user'] != null) {
-          _userList = [Map<String, dynamic>.from(data['user'])];
+        final user = data['user'];
+        if (user != null) {
+          _userList = [Map<String, dynamic>.from(user)];
 
+          // simpan user ke DB lokal
           await _saveUsersToDatabase(username, password);
+
+          // simpan menu ke DB lokal jika ada
+          if (data['menu'] != null) {
+            try {
+              await dbHelper
+                  .insertMenuMobileBatch(List<dynamic>.from(data['menu']));
+            } catch (e) {
+              print('Gagal simpan menu ke DB: $e');
+            }
+          }
+
+          // simpan beberapa info user ke SharedPreferences
           await _saveUserToSharedPreferences();
           return true;
         }
       }
-      return false; // Login gagal
+      return false;
     } catch (e) {
-      
       print("Error during login: $e");
       return false;
     }
   }
 
+  Map<String, dynamic>? getLastLoginData() => _lastLoginData;
+
   Future<void> _saveUsersToDatabase(String username, String password) async {
     for (var userMap in _userList) {
       UserModel user = UserModel.fromMap(userMap);
-
+      // Sesuaikan insertUser signature di DBHelper (kamu sebelumnya memakai insertUser(user, username, password))
       await dbHelper.insertUser(user, username, password);
     }
   }
@@ -110,47 +102,7 @@ class UserRepository {
     }
   }
 
-  // // Add user to SQLite and API
-  // Future<void> addUser(User user) async {
-  //   const url = 'https://jsonplaceholder.typicode.com/users';
-  //   final response = await http.post(
-  //     Uri.parse(url),
-  //     headers: {'Content-Type': 'application/json'},
-  //     body: json.encode(user.toJson()),
-  //   );
-
-  //   if (response.statusCode == 201) {
-  //     dbHelper.insertUser(user);
-  //   } else {
-  //     throw Exception('Failed to add user');
-  //   }
-  // }
-
-  // // Update user in SQLite and API
-  // Future<void> updateUser(User user) async {
-  //   final url = 'https://jsonplaceholder.typicode.com/users/${user.id}';
-  //   final response = await http.put(
-  //     Uri.parse(url),
-  //     headers: {'Content-Type': 'application/json'},
-  //     body: json.encode(user.toJson()),
-  //   );
-
-  //   if (response.statusCode == 200) {
-  //     dbHelper.updateUser(user);
-  //   } else {
-  //     throw Exception('Failed to update user');
-  //   }
-  // }
-
-  // // Delete user from SQLite and API
-  // Future<void> deleteUser(int id) async {
-  //   final url = 'https://jsonplaceholder.typicode.com/users/$id';
-  //   final response = await http.delete(Uri.parse(url));
-
-  //   if (response.statusCode == 200) {
-  //     dbHelper.deleteUser(id);
-  //   } else {
-  //     throw Exception('Failed to delete user');
-  //   }
-  // }
+  Future<List<Map<String, dynamic>>> getMenuFromDb(String username) async {
+    return await dbHelper.getMenuMobileItems();
+  }
 }

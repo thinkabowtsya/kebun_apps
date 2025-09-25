@@ -111,45 +111,55 @@ class MaterialProvider with ChangeNotifier {
     }
   }
 
-  Future<void> simpanMaterial(
-      {required String? gudang,
-      required String? material,
-      required String? qty,
-      required String? notrans,
-      required String? kodekegiatan,
-      required String? kodeorg,
-      required BuildContext context}) async {
+  Future<void> simpanMaterial({
+    required String? gudang,
+    required String? material,
+    required String? qty,
+    required String? notrans,
+    required String? kodekegiatan,
+    required String? kodeorg,
+    required BuildContext context,
+  }) async {
     final errors = <String>[];
     final Database? db = await _dbHelper.database;
 
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     var username = prefs.getString('username')?.trim();
 
+    if (db == null) return;
+
     try {
-      await db?.execute('BEGIN TRANSACTION');
+      // gunakan transaction agar COMMIT/ROLLBACK otomatis
+      await db.transaction((txn) async {
+        String strCheck =
+            '''   SELECT * FROM kebun_aktifitas where notransaksi= ? and updateby= ?''';
 
-      String strCheck =
-          '''   SELECT * FROM kebun_aktifitas where notransaksi= ? and updateby= ?''';
+        final resultCheck = await txn.rawQuery(strCheck, [notrans, username]);
 
-      final resultCheck = await db!.rawQuery(strCheck, [notrans, username]);
+        if (resultCheck.isEmpty) {
+          errors.add('gagal transaksi');
+          // rollback otomatis oleh transaction bila kita melempar
+          throw StateError('gagal_transaksi');
+        }
 
-      if (resultCheck.isEmpty) {
-        errors.add('gagal transaksi');
-      }
-      await db.delete(
-        'kebun_pakaimaterial',
-        where:
-            'notransaksi = ? AND kodekegiatan = ? AND kodeorg = ? AND kodebarang = ?',
-        whereArgs: [notrans, kodeorg, material],
-      );
-      final _kuantitashaMaterial = kuantitashaMaterial ?? '0';
+        // delete existing (saya pertahankan where & whereArgs sesuai kode asli)
+        await txn.delete(
+          'kebun_pakaimaterial',
+          where:
+              'notransaksi = ? AND kodekegiatan = ? AND kodeorg = ? AND kodebarang = ?',
+          whereArgs: [notrans, kodeorg, material],
+        );
 
-      String strInsert =
-          '''  INSERT INTO  kebun_pakaimaterial(notransaksi,kodekegiatan,kodeorg,gudang,kodebarang,kwantitasha,kwantitas,updateby) values('$notrans','$kodekegiatan','$kodeorg','$gudang','$material','$_kuantitashaMaterial','$qty','$username') ''';
+        final _kuantitashaMaterial = kuantitashaMaterial ?? '0';
 
-      await db.rawQuery(strInsert);
-      await db.execute('COMMIT');
+        String strInsert =
+            '''  INSERT INTO  kebun_pakaimaterial(notransaksi,kodekegiatan,kodeorg,gudang,kodebarang,kwantitasha,kwantitas,updateby) values('$notrans','$kodekegiatan','$kodeorg','$gudang','$material','$_kuantitashaMaterial','$qty','$username') ''';
 
+        await txn.rawQuery(strInsert);
+        // jika sampai sini tanpa throw => commit otomatis di akhir callback
+      });
+
+      // setelah commit sukses -> lakukan UI/refresh seperti sebelumnya
       _shouldRefresh = true;
       Navigator.pop(context, {
         'success': true,
@@ -157,9 +167,9 @@ class MaterialProvider with ChangeNotifier {
       });
 
       notifyListeners();
-    } catch (e) {
-      await db?.execute('ROLLBACK');
-      debugPrint('❌ Error saat simpan prestasi: $e');
+    } catch (e, st) {
+      // db.transaction otomatis rollback bila terjadi exception
+      debugPrint('❌ Error saat simpan material: $e\n$st');
       rethrow;
     }
   }

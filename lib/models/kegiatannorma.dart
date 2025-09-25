@@ -11,11 +11,12 @@ class KegiatanNorma {
       required this.kodebarang});
 
   factory KegiatanNorma.fromJson(Map<String, dynamic> json) {
+    // print('kegiatan norma $json');
     return KegiatanNorma(
-      kodekegiatan: json['kodekegiatan'],
-      kelompok: json['kelompok'],
-      tipeanggaran: json['tipeanggaran'],
-      kodebarang: json['kodebarang'],
+      kodekegiatan: (json['kodekegiatan'] ?? '').toString(),
+      kelompok: (json['kelompok'] ?? '').toString(),
+      tipeanggaran: (json['tipeanggaran'] ?? '').toString(),
+      kodebarang: (json['kodebarang'] ?? '').toString(),
     );
   }
 
