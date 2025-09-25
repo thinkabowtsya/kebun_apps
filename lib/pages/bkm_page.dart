@@ -41,7 +41,6 @@ class _BukuKerjaMandorBodyState extends State<BukuKerjaMandorBody>
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final provider = Provider.of<BkmProvider>(context, listen: false);
 
-      // print('cek rkh');
       // print(cekrkh.cekRKHA());
       String cleanDate = DateFormat('yyyy-MM-dd').format(selectedDate).trim();
       provider.tampilkanListBKM(username, cleanDate);
