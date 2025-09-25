@@ -59,6 +59,7 @@ dependencies:
   flutter_launcher_icons: "^0.14.4"
   flutter_image_compress: ^2.3.0
   flutter_secure_storage: ^8.0.0
+  hashids2: ^2.0.0
 
 dev_dependencies:
   flutter_test:

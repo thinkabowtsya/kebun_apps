@@ -269,7 +269,6 @@ class _SpbBodyState extends State<SpbBody> with RouteAware {
   }
 
   void doView(row) {
-    print('do view');
     Navigator.of(context).pushNamed(
       '/lihat-spb',
       arguments: {
@@ -316,7 +315,11 @@ class _SpbBodyState extends State<SpbBody> with RouteAware {
   }
 
   void doSync(row) {
-    Navigator.of(context).pushNamed('/sinkronisasi');
+    Navigator.of(context).pushNamed('/sinkronisasi').then((value) {
+      setState(() {
+        context.read<SpbProvider>().fetchSpbList(row['tanggal']);
+      });
+    });
   }
 
   void doPrint(row) async {

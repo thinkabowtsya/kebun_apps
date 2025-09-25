@@ -292,7 +292,6 @@ class _PanenBodyState extends State<PanenBody> with RouteAware {
   }
 
   void doDelete(row, BuildContext context) async {
-    print(row);
     final panenProvider = Provider.of<PanenProvider>(context, listen: false);
     // String cleanDate = DateFormat('yyyy-MM-dd').format(row['tanggal']).trim();
     final confirm = await showDialog<bool>(
@@ -329,7 +328,11 @@ class _PanenBodyState extends State<PanenBody> with RouteAware {
   }
 
   void doSync(row) {
-    Navigator.of(context).pushNamed('/sinkronisasi');
+    Navigator.of(context).pushNamed('/sinkronisasi').then((value) {
+      setState(() {
+        context.read<PanenProvider>().fetchListPanen(row['tanggal']);
+      });
+    });
   }
 
   void doPrint(row) async {

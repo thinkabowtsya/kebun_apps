@@ -392,7 +392,13 @@ class _HaPrestasiBodyState extends State<HaPrestasiBody> with RouteAware {
   }
 
   void doSync(row) {
-    Navigator.of(context).pushNamed('/sinkronisasi');
+    Navigator.of(context).pushNamed('/sinkronisasi').then((value) {
+      setState(() {
+        context
+            .read<HaPrestasiPanenProvider>()
+            .fetchListHaPanen(row['tanggal']);
+      });
+    });
   }
 
   void doPrint(row) {}

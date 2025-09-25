@@ -14,6 +14,7 @@ import 'package:flutter_application_3/providers/panen/prestasi_provider.dart';
 import 'package:flutter_application_3/providers/spb/spb_provider.dart';
 // import 'package:flutter_application_3/services/FormMode.dart';
 import 'package:flutter_application_3/services/notransaksihelper.dart';
+import 'package:flutter_application_3/services/panen_encrypt.dart';
 import 'package:flutter_application_3/utils/image_helper.dart';
 import 'package:flutter_application_3/widget/datatable.dart';
 import 'package:flutter_application_3/widget/kernetTable.dart';
@@ -787,8 +788,8 @@ class _FormSpbBodyState extends State<FormSpbBody> {
       final String noTph = _get(parts, 0);
       final String noTransaksi = _get(parts, 1);
       final String pemanenNik = _get(parts, 2);
-      final int jjg = int.tryParse(_get(parts, 3)) ?? 0;
-      final int brondolan = int.tryParse(_get(parts, 4)) ?? 0;
+      final String jjg = _get(parts, 3);
+      final String brondolan = _get(parts, 4);
       final String tanggal = _get(parts, 5);
       final String status = _get(parts, 6);
       final String cetakan = _get(parts, 7);
@@ -821,18 +822,18 @@ class _FormSpbBodyState extends State<FormSpbBody> {
       final result = {
         "mode": "1",
         "noTph": noTph,
-        "noTransaksi": noTransaksi,
-        "pemanenNik": pemanenNik,
-        "jjg": jjg,
-        "brondolan": brondolan,
-        "tanggal": tanggal,
+        "noTransaksi": PanenEncrypt.notransDecrtypt2(noTransaksi),
+        "pemanenNik": PanenEncrypt.decryptNumberZeroFirst(pemanenNik),
+        "jjg": PanenEncrypt.decryptNumber(jjg.toString()),
+        "brondolan": PanenEncrypt.decryptNumber(brondolan.toString()),
+        "tanggal": PanenEncrypt.dateDecrtypt(tanggal),
         "status": status,
         "cetakan": cetakan,
         "rotasi": rotasi,
-        "mandor1": mandor1,
-        "mandor2": mandor2,
-        "kerani": kerani,
-        "asisten": asisten,
+        "mandor1": PanenEncrypt.decryptNumberZeroFirst(mandor1),
+        "mandor2": PanenEncrypt.decryptNumberZeroFirst(mandor2),
+        "kerani": PanenEncrypt.dateDecrtypt(kerani),
+        "asisten": PanenEncrypt.dateDecrtypt(asisten),
         "denda": dendaList,
         "raw": qrValue,
       };
