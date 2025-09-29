@@ -2529,11 +2529,12 @@ class SyncProvider with ChangeNotifier {
     print("🔗 Full URL: $fullUrl");
   }
 
-  String normalizeDataUri(String? maybeEncoded) {
-    if (maybeEncoded == null) return '';
-    String s = maybeEncoded;
+  String normalizeDataUri(String? maybe) {
+    if (maybe == null || maybe.isEmpty) return '';
 
-    // 1) jika ter-percent-encoded, decode dulu
+    String s = maybe;
+
+    // Jika ter-percent-encoded, decode dulu
     if (s.contains('%')) {
       try {
         s = Uri.decodeComponent(s);
@@ -2542,15 +2543,33 @@ class SyncProvider with ChangeNotifier {
       }
     }
 
-    // 2) replace spaces -> + (safety for base64)
+    // ganti spasi menjadi '+'
     s = s.replaceAll(' ', '+');
 
-    // 3) jika hanya base64 tanpa prefix, tambahkan prefix
-    if (!s.startsWith('data:') && s.length > 100 && s.contains('/9j/')) {
-      s = 'data:image/jpeg;base64,$s';
+    // hindari double prefix
+    if (s.startsWith('data:')) {
+      return s;
+    }
+
+    // jika terlihat seperti raw base64 JPEG (heuristik), tambahkan prefix
+    if (s.length > 100 && (s.contains('/9j/') || s.startsWith('/9j'))) {
+      return 'data:image/jpeg;base64,$s';
     }
 
     return s;
+  }
+
+  String fixBase64(String? encoded) {
+    if (encoded == null || encoded.isEmpty) return '';
+
+    // decode %2F, %2B, dll
+    String decoded = Uri.decodeComponent(encoded);
+
+    // kalau belum ada prefix, tambahkan
+    if (!decoded.startsWith('data:image')) {
+      decoded = 'data:image/jpeg;base64,' + decoded;
+    }
+    return decoded;
   }
 
   Future<List<String>> insertImageBkm({
@@ -2569,120 +2588,58 @@ class SyncProvider with ChangeNotifier {
       for (final item in datafromserver) {
         final key = item.keys.first;
         final value = item.values.first;
-        notrx[key] = value.toString(); // pastikan String
+        notrx[key] = value.toString();
       }
 
-      List<String> strData = [];
+      List<Map<String, dynamic>> filesData = [];
 
       String query = '''
-    SELECT 
-      t1.*, 
-      t2.namakegiatan 
-    FROM (
-      SELECT 
-        notransaksi,
-        CASE 
-          WHEN nobkm = "" OR nobkm IS NULL THEN "kosong" 
-          ELSE nobkm 
-        END AS nobkm,
-        fotoStart2,
-        CASE 
-          WHEN jumlahhasilkerja = "" OR jumlahhasilkerja IS NULL THEN "kosong" 
-          ELSE jumlahhasilkerja 
-        END AS jumlahhasilkerja,
-        fotoEnd2,
-        kodeorg, 
-        kodekegiatan 
-      FROM kebun_prestasi 
-      WHERE notransaksi = ?
-    ) AS t1
-    LEFT JOIN setup_kegiatan t2 ON t1.kodekegiatan = t2.kodekegiatan;
-  ''';
+      SELECT t1.*, t2.namakegiatan
+      FROM (
+        SELECT 
+          notransaksi,
+          CASE WHEN nobkm = "" OR nobkm IS NULL THEN "kosong" ELSE nobkm END AS nobkm,
+          fotoStart2,
+          CASE WHEN jumlahhasilkerja = "" OR jumlahhasilkerja IS NULL THEN "kosong" ELSE jumlahhasilkerja END AS jumlahhasilkerja,
+          fotoEnd2,
+          kodeorg, 
+          kodekegiatan 
+        FROM kebun_prestasi 
+        WHERE notransaksi = ?
+      ) AS t1
+      LEFT JOIN setup_kegiatan t2 ON t1.kodekegiatan = t2.kodekegiatan;
+    ''';
 
       final List<Map<String, dynamic>> results =
           await db.rawQuery(query, [nodevice]);
 
-      print(results);
-
-      // List<List<String>> data = [];
-
-      // String potoawal = "";
-      // String potoakhir = "";
-      // String namakegiatan = "";
-      // String potoawal2 = "";
-      // String potoakhir2 = "";
-
       for (var row in results) {
-        String? nobkm = row['nobkm'];
-        String? fotoStart2 = row['fotoStart2'];
-        String? jumlahhasilkerja = row['jumlahhasilkerja'];
-        String? fotoEnd2 = row['fotoEnd2'];
         String kodeorg = row['kodeorg'];
         String kodekegiatan = row['kodekegiatan'];
-
-        String? potoawal;
-        String? potoakhir;
-        String? potoawal2;
-        String? potoakhir2;
-
-        potoawal = await PhotoHelper.encodeFileForParam(nobkm);
-        potoakhir = await PhotoHelper.encodeFileForParam(fotoStart2);
-
-        potoawal2 = await PhotoHelper.encodeFileForParam(jumlahhasilkerja);
-        potoakhir2 = await PhotoHelper.encodeFileForParam(fotoEnd2);
-
-        print('foto awal');
-        print(potoawal);
-
-        // if (nobkm != null && nobkm != "kosong" && nobkm.contains("/")) {
-        //   potoawal = "data:image/jpeg;base64,$potoawal";
-        // }
-
-        // if (fotoStart2 != null && fotoStart2.contains("/")) {
-        //   potoawal2 = "data:image/jpeg;base64,$potoawal2";
-        // }
-
-        // if (jumlahhasilkerja != null &&
-        //     jumlahhasilkerja != "kosong" &&
-        //     jumlahhasilkerja.contains("/")) {
-        //   potoakhir = "data:image/jpeg;base64,$potoakhir2";
-        // }
-
-        // if (fotoEnd2 != null && fotoEnd2.contains("/")) {
-        //   potoakhir2 = "data:image/jpeg;base64,$potoakhir2";
-        // }
-
-        // Buat key gabungan
         String key = '$nodevice$kodekegiatan$kodeorg';
         String notransaksisrv = notrx[key] ?? '';
 
-        String krmD = '&notransaksisrv=$notransaksisrv'
-            '&kegiatan=$kodekegiatan'
-            '&kodeorg=$kodeorg'
-            '&potoawal=$potoawal'
-            '&potoakhir=$potoakhir'
-            '&potoawal2=$potoawal2'
-            '&potoakhir2=$potoakhir2';
-
-        strData.add(krmD);
+        filesData.add({
+          'notransaksisrv': notransaksisrv,
+          'kodeorg': kodeorg,
+          'kodekegiatan': kodekegiatan,
+          'potoawal': row['nobkm'],
+          'potoakhir': row['fotoStart2'],
+          'potoawal2': row['jumlahhasilkerja'],
+          'potoakhir2': row['fotoEnd2'],
+        });
       }
 
-      print('strData');
-      print(strData);
-
-      final errors = await execImageBkm(
+      final errorsResult = await execImageBkm(
         nodevice: nodevice,
         notransaksi: notransaksi,
         tanggal: tanggal,
-        data: strData,
-        number: 0,
+        filesData: filesData,
       );
 
-      return errors;
-
-      // print(result);
+      return errorsResult;
     } catch (e) {
-      errors.add('Error di synImage: $e');
+      errors.add('Error di insertImageBkm: $e');
     }
 
     return errors;
@@ -2692,122 +2649,138 @@ class SyncProvider with ChangeNotifier {
     String? nodevice,
     String? notransaksi,
     String? tanggal,
-    required List<String> data,
-    int number = 0,
+    required List<Map<String, dynamic>> filesData,
   }) async {
     final errors = <String>[];
-
-    final Database? db = await _dbHelper.database;
-    if (db == null) return [];
-
     final SharedPreferences prefs = await SharedPreferences.getInstance();
-    // var server = prefs.getString('server');
-    var server = ApiConstants.apiBaseUrlTesting;
-    var kebun = prefs.getString('lokasitugas');
-    var username = prefs.getString('username');
-    var password = prefs.getString('password');
+    final server = ApiConstants.apiBaseUrlTesting;
+    final kebun = prefs.getString('lokasitugas');
+    final username = prefs.getString('username');
+    final password = prefs.getString('password');
 
     try {
-      // String strData = '&notransaksi=$notransaksi'
-      //     '&noref=$nodevice'
-      //     '&kodeorg=$kebun'
-      //     '&tanggal=$tanggal';
+      for (var fileMap in filesData) {
+        Map<String, String> fields = {
+          'method': 'transaction',
+          'tipeData': 'bkm',
+          'datatransfer': 'dataphoto',
+          'username': username ?? '',
+          'password': password ?? '',
+          'uuid': '',
+          'notransaksi': notransaksi.toString(),
+          'noref': nodevice ?? '',
+          'kodeorg': fileMap['kodeorg'],
+          'kodekegiatan': fileMap['kodekegiatan'],
+          'notrx': fileMap['notransaksisrv'],
+          'tanggal': tanggal ?? '',
+        };
 
-      String strData = '&notransaksi=$notransaksi'
-          '&noref=$nodevice'
-          '&kodeorg=$kebun'
-          '&tanggal=$tanggal';
+        Map<String, File?> fileFields = {
+          'potoawal': fileMap['potoawal'] != "kosong"
+              ? File(fileMap['potoawal'])
+              : null,
+          'potoakhir':
+              fileMap['potoakhir'] != null ? File(fileMap['potoakhir']) : null,
+          'potoawal2': fileMap['potoawal2'] != "kosong"
+              ? File(fileMap['potoawal2'])
+              : null,
+          'potoakhir2': fileMap['potoakhir2'] != null
+              ? File(fileMap['potoakhir2'])
+              : null,
+        };
 
-      const int limit = 1;
-      int forloop = number + limit;
+        final response = await sendPostRequestMultipart(
+            '$server/owlMobile.php', fields, fileFields);
 
-      if (forloop >= data!.length) {
-        forloop = data.length;
+        if (response != null) {
+          final json = jsonDecode(response.body);
+          final errorsBkm = await checkTransactionBkmComplete(
+              notransaksi: json['noref'],
+              serverno: json['notransaksi'],
+              tanggal: tanggal ?? '');
+          errors.addAll(errorsBkm);
+        } else {
+          errors.add('Server error saat upload foto.');
+        }
       }
-
-      for (int i = number; i < forloop; i++) {
-        strData += data[i];
-      }
-
-      List<String> kodekegiatan = [];
-      List<String> kodeorg = [];
-      List<String> notrxsrv = [];
-      List<String> potoawal = [];
-      List<String> potoakhir = [];
-      List<String> potoawal2 = [];
-      List<String> potoakhir2 = [];
-
-      Map<String, String> notrxserver = {};
-
-      for (int i = 0; i < data.length; i++) {
-        // langsung split seperti JS
-
-        kodekegiatan.add(data[i].split('&')[2].split('=')[1]);
-        kodeorg.add(data[i].split('&')[3].split('=')[1]);
-        notrxsrv.add(data[i].split('&')[1].split('=')[1]);
-        potoawal.add(data[i].split('&')[4].split('=')[1]);
-        potoakhir.add(data[i].split('&')[5].split('=')[1]);
-        potoawal2.add(data[i].split('&')[6].split('=')[1]);
-        potoakhir2.add(data[i].split('&')[7].split('=')[1]);
-
-        notrxserver['$nodevice${kodekegiatan[i]}${kodeorg[i]}'] = notrxsrv[i];
-      }
-
-      // print(potoawal);
-
-      String paramMap = 'method=transaction'
-          '&tipeData=bkm'
-          '&datatransfer=dataphoto'
-          '&username=$username'
-          '&password=$password'
-          '&uuid='
-          '$strData'
-          '&kodeorg=${kodeorg.join(",")}'
-          '&kodekegiatan=${kodekegiatan.join(",")}'
-          '&notrx=${notrxsrv.join(",")}'
-          '&potoawal_all=${potoawal.join(",")}'
-          '&potoakhir_all=${potoakhir.join(",")}'
-          '&potoawal2_all=${potoawal2.join(",")}'
-          '&potoakhir2_all=${potoakhir2.join(",")}';
-
-      print('param map');
-      print(paramMap);
-
-      final fullLink = "$server/owlMobile.php?$paramMap";
-
-      // print('full link');
-      // print(strData);
-      // print(potoakhir);
-      // print(potoawal2);
-      // print(potoakhir2);
-
-      final url = "$server/owlMobile.php";
-      final response = await sendPostRequest(url, paramMap);
-
-      if (response != null) {
-        final json = jsonDecode(response.body);
-
-        String notransaksi = json['notransaksi'];
-        String noref = json['noref'];
-
-        bool isError = json['err']['err'] == 'true';
-        String message = json['err']['mssg'];
-
-        final errors = await checkTransactionBkmComplete(
-            notransaksi: noref, serverno: notransaksi, tanggal: tanggal);
-
-        return errors;
-      } else {
-        errors.add("Server error: ${response?.statusCode ?? 'no response'}");
-      }
-
-      // print(result);
     } catch (e) {
-      print(e);
-      errors.add('Error di exec image: $e');
+      errors.add('Error di execImageBkm: $e');
     }
 
     return errors;
+  }
+
+  Future<http.Response?> sendPostRequestMultipart(
+    String url,
+    Map<String, String> fields,
+    Map<String, File?> files,
+  ) async {
+    var request = http.MultipartRequest('POST', Uri.parse(url));
+
+    request.fields.addAll(fields);
+
+    for (var entry in files.entries) {
+      if (entry.value != null) {
+        request.files.add(
+            await http.MultipartFile.fromPath(entry.key, entry.value!.path));
+      }
+    }
+
+    try {
+      var streamedResponse = await request.send();
+      return await http.Response.fromStream(streamedResponse);
+    } catch (e) {
+      print('Error sending multipart request: $e');
+      return null;
+    }
+  }
+
+  Future<String> saveDebugOnDevice(
+    String content, {
+    String namePrefix = 'owl_param',
+    bool full = true,
+    int previewPrefixLen = 800,
+    int previewSuffixLen = 800,
+  }) async {
+    try {
+      final Directory docsDir = await getApplicationDocumentsDirectory();
+      final Directory logDir = Directory('${docsDir.path}/logs');
+
+      if (!await logDir.exists()) {
+        await logDir.create(recursive: true);
+      }
+
+      final String ts = DateTime.now().toIso8601String().replaceAll(':', '-');
+      final String filename = '$namePrefix-$ts.txt';
+      final File f = File('${logDir.path}/$filename');
+
+      String toWrite;
+      if (full) {
+        toWrite = content;
+      } else {
+        final int len = content.length;
+        final String prefix = content.substring(
+            0,
+            content.length > previewPrefixLen
+                ? previewPrefixLen
+                : content.length);
+        final String suffix = len > previewPrefixLen + previewSuffixLen
+            ? content.substring(len - previewSuffixLen)
+            : (len > previewPrefixLen
+                ? content.substring(previewPrefixLen)
+                : '');
+        toWrite =
+            'LENGTH=$len\n\n---PREFIX---\n$prefix\n\n---SUFFIX---\n$suffix\n';
+      }
+
+      await f.writeAsBytes(utf8.encode(toWrite));
+      final String savedPath = f.path;
+      print('Saved debug file: $savedPath (len=${toWrite.length})');
+      return savedPath;
+    } catch (e, st) {
+      print('saveDebugOnDevice error: $e\n$st');
+      return '';
+    }
   }
 
   Future<List<String>> checkTransactionBkmComplete(
@@ -2885,9 +2858,11 @@ class SyncProvider with ChangeNotifier {
       final response = await http.post(
         uri,
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'Accept': 'application/json',
         },
         body: body,
+        encoding: const Utf8Codec(),
       );
 
       return response;

@@ -25,35 +25,43 @@ Future<void> printQrAndInfo({
 
   bytes.addAll(generator.qrcode(
     qrData,
-    size: QRSize.size2,
+    size: QRSize.size7,
     align: PosAlign.center,
   ));
+  bytes.addAll(generator.feed(1));
 
   printer.writeBytes(Uint8List.fromList(bytes));
 
   await Future.delayed(const Duration(milliseconds: 120));
 
+  // void printAligned(String label, String value) {
+  //   const int totalWidth = 20;
+  //   final leftLabel = label.length > 15 ? label.substring(0, 15) : label;
+  //   final val = value;
+
+  //   final int remaining = totalWidth - leftLabel.length - val.length;
+
+  //   String middle;
+  //   if (remaining > 0) {
+  //     middle = ' ' * remaining;
+  //   } else {
+  //     final allowedValLen = totalWidth - leftLabel.length;
+  //     final truncatedVal =
+  //         allowedValLen > 0 ? val.substring(0, allowedValLen) : '';
+
+  //     printer.printCustom(leftLabel + truncatedVal, 1, 0);
+  //     return;
+  //   }
+
+  //   final line = leftLabel + middle + val;
+  //   printer.printCustom(line, 1, 0);
+  // }
+
   void printAligned(String label, String value) {
-    const int totalWidth = 20;
-    final leftLabel = label.length > 15 ? label.substring(0, 15) : label;
-    final val = value;
-
-    final int remaining = totalWidth - leftLabel.length - val.length;
-
-    String middle;
-    if (remaining > 0) {
-      middle = ' ' * remaining;
-    } else {
-      final allowedValLen = totalWidth - leftLabel.length;
-      final truncatedVal =
-          allowedValLen > 0 ? val.substring(0, allowedValLen) : '';
-
-      printer.printCustom(leftLabel + truncatedVal, 1, 0);
-      return;
-    }
-
-    final line = leftLabel + middle + val;
-    printer.printCustom(line, 1, 0);
+    const int totalWidth = 32;
+    String line = label.padRight(15); // label kiri max 15
+    String val = value.padLeft(totalWidth - line.length);
+    printer.printCustom("$line$val", 1, 0); // size 1 = normal, 0 = left align
   }
 
   printAligned("TPH", blok.toUpperCase());
