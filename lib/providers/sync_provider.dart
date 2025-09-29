@@ -1733,7 +1733,7 @@ class SyncProvider with ChangeNotifier {
     String? notransaksi,
     String? serverno,
   }) async {
-    final errors = <String>[];
+    var errors = <String>[];
 
     final Database? db = await _dbHelper.database;
     if (db == null) return [];
@@ -1743,72 +1743,52 @@ class SyncProvider with ChangeNotifier {
 
     await db.rawQuery(str);
 
-    final error = await tryUploadPhoto(notransaksi: notransaksi);
+    errors = await tryUploadPhoto(notransaksi: notransaksi.toString());
 
-    return error;
+    return errors;
   }
 
-  Future<List<String>> tryUploadPhoto({
-    String? notransaksi,
-  }) async {
-    var errors = <String>[];
+  Future<List<String>> tryUploadPhoto({required String notransaksi}) async {
+    final errors = <String>[];
 
     final Database? db = await _dbHelper.database;
-    if (db == null) return [];
+    if (db == null) return ['no_db'];
 
-    String str = ''' SELECT * FROM kebun_spbht where nospb=? ''';
-
-    // final rows = await db.rawQuery(str);
+    final String str = 'SELECT * FROM kebun_spbht where nospb=?';
     final List<Map<String, dynamic>> results =
         await db.rawQuery(str, [notransaksi]);
 
     final List<String> fileToUpload = [];
     final List<String> newFilename = [];
-    String? foto;
-    var potoawal2;
+
     for (final row in results) {
-      String? blobOrString = row['spbfile'];
+      final blobOrString = row['spbfile'];
+      if (blobOrString == null) continue;
 
-      print(blobOrString);
-      // String base64Image = '';
-
-      // if (blobOrString is Uint8List) {
-      //   base64Image = base64Encode(blobOrString);
-      // } else if (blobOrString is String) {
-      //   // kalau sudah base64 string di DB
-      //   base64Image = blobOrString;
-      // } else {
-      //   // tipe tak dikenal → skip
-      //   continue;
-      // }
-
-      // final String dataUrl = 'data:image/jpeg;base64,$base64Image';
-
-      potoawal2 = await PhotoHelper.encodeFileForParam(blobOrString);
-
-      final String nospb = row['nospb']?.toString() ?? '';
+      final encoded = await PhotoHelper.encodeFileForParam(blobOrString);
+      final normalized = normalizeDataUri(encoded);
+      final nospb = row['nospb']?.toString() ?? '';
       if (nospb.isEmpty) continue;
 
-      fileToUpload.add(potoawal2);
+      fileToUpload.add(normalized);
       newFilename.add(nospb);
     }
 
-    if (fileToUpload.isNotEmpty) {
-      int uploadCounter = 0;
+    if (fileToUpload.isEmpty) return errors;
 
-      print('data uri : ');
-      print(fileToUpload);
+    for (int i = 0; i < fileToUpload.length; i++) {
+      final errors =
+          await sendImage(dataUri: fileToUpload[i], filename: newFilename[i]);
 
-      // await saveBase64ToFile(potoawal2, "foto_test.jpg");
-
-      // errors = await sendImage(dataUri: potoawal2, filename: 'foto_test.jpg');
-
-      // return errors;
-
-      // OPTIONAL: kalau mau kirim semua berurutan:
-      for (int i = 0; i < fileToUpload.length; i++) {
-        await sendImage(dataUri: fileToUpload[i], filename: newFilename[i]);
+      if (errors.contains('berhasil')) {
+        print('Uploaded ${newFilename[i]} OK');
+      } else {
+        print('Upload failed for ${newFilename[i]} -> $errors');
+        errors.add('${newFilename[i]}:${errors.join(',')}');
+        // optional: break atau lanjut sesuai kebijakan
       }
+
+      return errors;
     }
 
     return errors;
@@ -1832,42 +1812,111 @@ class SyncProvider with ChangeNotifier {
     }
   }
 
-  Future<List<String>> sendImage({String? dataUri, String? filename}) async {
+  // Future<List<String>> sendImage({String? dataUri, String? filename}) async {
+  //   final errors = <String>[];
+  //   final Database? db = await _dbHelper.database;
+  //   if (db == null) return [];
+
+  //   final SharedPreferences prefs = await SharedPreferences.getInstance();
+  //   // var server = prefs.getString('server');
+  //   var server = ApiConstants.apiBaseUrlTesting;
+  //   var kebun = prefs.getString('lokasitugas');
+  //   var username = prefs.getString('username');
+  //   var password = prefs.getString('password');
+
+  //   String tipegambar = "";
+  //   if (dataUri != '') {
+  //     tipegambar = "jpeg";
+
+  //     String paramMap = 'method=transaction'
+  //         '&tipeData=images'
+  //         '&username=$username'
+  //         '&password=$password'
+  //         '&dtImage=$dataUri'
+  //         '&filename=$filename'
+  //         '&tipeGambar=jpeg'
+  //         '&uuid='
+  //         ' ';
+
+  //     print(paramMap);
+
+  //     final url = "$server/owlMobile.php";
+  //     final response = await sendPostRequest(url, paramMap);
+
+  //     // print(response.body);
+  //     if (response != null) {
+  //       final json = jsonDecode(response.body);
+
+  //       errors.add('berhasil');
+  //     }
+  //   }
+
+  //   return errors;
+  // }
+
+  Future<List<String>> sendImage(
+      {required String dataUri, required String filename}) async {
     final errors = <String>[];
-    final Database? db = await _dbHelper.database;
-    if (db == null) return [];
 
     final SharedPreferences prefs = await SharedPreferences.getInstance();
-    // var server = prefs.getString('server');
-    var server = ApiConstants.apiBaseUrlTesting;
-    var kebun = prefs.getString('lokasitugas');
-    var username = prefs.getString('username');
-    var password = prefs.getString('password');
+    final server = ApiConstants
+        .apiBaseUrlTesting; // atau dari prefs kalau itu yang dipakai
+    final username = prefs.getString('username') ?? '';
+    final password = prefs.getString('password') ?? '';
+    final uuid = prefs.getString('uuid') ?? '';
 
-    String tipegambar = "";
-    if (dataUri != '') {
-      tipegambar = "jpeg";
+    // Pastikan ada data
+    if (dataUri.isEmpty || filename.isEmpty) {
+      errors.add('empty_param');
+      return errors;
+    }
 
-      print(dataUri);
-      String paramMap = 'method=transaction'
-          '&tipeData=images'
-          '&username=$username'
-          '&password=$password'
-          '&dtImage=$dataUri'
-          '&filename=$filename'
-          '&tipeGambar=jpeg'
-          '&uuid='
-          ' ';
+    final url = Uri.parse('$server/owlMobile.php');
 
-      final url = "$server/owlMobile.php";
-      final response = await sendPostRequest(url, paramMap);
+    // Body sebagai Map -> http.post akan meng-encode dengan application/x-www-form-urlencoded
+    final body = <String, String>{
+      'method': 'transaction',
+      'tipeData': 'images',
+      'username': username,
+      'password': password,
+      'dtImage': dataUri, // <-- aman karena dikirim lewat body Map
+      'filename': filename,
+      'tipeGambar': 'jpeg',
+      'uuid': uuid,
+    };
 
-      // print(response.body);
-      if (response != null) {
-        final json = jsonDecode(response.body);
+    try {
+      final response =
+          await http.post(url, body: body).timeout(const Duration(seconds: 60));
 
-        errors.add('berhasil');
+      print('UPLOAD => ${url.toString()}');
+      print('STATUS  => ${response.statusCode}');
+      print('LENGTH  => ${response.contentLength}');
+      // jangan print seluruh body jika sangat besar, tapi untuk debugging awal bisa:
+      print(
+          'BODY    => ${response.body.length > 1000 ? response.body.substring(0, 1000) + "..." : response.body}');
+
+      if (response.statusCode == 200) {
+        // coba decode JSON (sesuaikan jika server balikan bukan JSON)
+        try {
+          final data = jsonDecode(response.body);
+          if (data is Map && data['err'] == false) {
+            errors.add('berhasil');
+          } else {
+            errors.add('server_error');
+            print('Server response: ${response.body}');
+          }
+        } catch (e) {
+          // server tidak mengembalikan JSON atau format berbeda
+          print('JSON decode error: $e');
+          errors.add('invalid_response');
+        }
+      } else {
+        errors.add('http_${response.statusCode}');
       }
+    } catch (e) {
+      print('Upload exception: $e');
+      errors.add('exception');
     }
 
     return errors;

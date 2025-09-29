@@ -42,8 +42,8 @@ class _SpbBodyState extends State<SpbBody> with RouteAware {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final provider = Provider.of<SpbProvider>(context, listen: false);
       String cleanDate = DateFormat('yyyy-MM-dd').format(selectedDate).trim();
-      provider.fetchSpbList(cleanDate);
-      provider.createTableSpb();
+      await provider.fetchSpbList(cleanDate);
+      // provider.createTableSpb();
     });
   }
 
